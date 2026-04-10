@@ -1,3 +1,11 @@
+# -------------------------------------------------------------------------
+# NSP-specific variables
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+# AVM required resource interfaces
+# -------------------------------------------------------------------------
+
 variable "location" {
   type        = string
   description = "Azure region where the resource should be deployed."
@@ -18,53 +26,6 @@ variable "name" {
 variable "resource_group_name" {
   type        = string
   description = "The resource group where the resources will be deployed."
-}
-
-variable "enable_telemetry" {
-  type        = bool
-  default     = true
-  description = <<DESCRIPTION
-This variable controls whether or not telemetry is enabled for the module.
-For more information see <https://aka.ms/avm/telemetryinfo>.
-If it is set to false, then no telemetry will be collected.
-DESCRIPTION
-  nullable    = false
-}
-
-variable "lock" {
-  type = object({
-    kind = string
-    name = optional(string, null)
-  })
-  default     = null
-  description = <<DESCRIPTION
-Controls the Resource Lock configuration for this resource. The following properties can be specified:
-
-- `kind` - (Required) The type of lock. Possible values are `\"CanNotDelete\"` and `\"ReadOnly\"`.
-- `name` - (Optional) The name of the lock. If not specified, a name will be generated based on the `kind` value. Changing this forces the creation of a new resource.
-DESCRIPTION
-
-  validation {
-    condition     = var.lock != null ? contains(["CanNotDelete", "ReadOnly"], var.lock.kind) : true
-    error_message = "The lock level must be one of: 'None', 'CanNotDelete', or 'ReadOnly'."
-  }
-}
-
-# -------------------------------------------------------------------------
-# NSP-specific variables
-# -------------------------------------------------------------------------
-
-variable "profiles" {
-  type = map(object({
-    name = string
-  }))
-  default     = {}
-  description = <<DESCRIPTION
-A map of NSP profiles to create under the Network Security Perimeter. The map key is deliberately arbitrary to avoid issues where map keys may be unknown at plan time.
-
-- `name` - (Required) The name of the profile. Must follow NSP naming constraints (1-80 chars, alphanumeric with `_`, `.`, `-`).
-DESCRIPTION
-  nullable    = false
 }
 
 variable "access_rules" {
@@ -101,6 +62,49 @@ DESCRIPTION
   }
 }
 
+variable "enable_telemetry" {
+  type        = bool
+  default     = true
+  description = <<DESCRIPTION
+This variable controls whether or not telemetry is enabled for the module.
+For more information see <https://aka.ms/avm/telemetryinfo>.
+If it is set to false, then no telemetry will be collected.
+DESCRIPTION
+  nullable    = false
+}
+
+variable "lock" {
+  type = object({
+    kind = string
+    name = optional(string, null)
+  })
+  default     = null
+  description = <<DESCRIPTION
+Controls the Resource Lock configuration for this resource. The following properties can be specified:
+
+- `kind` - (Required) The type of lock. Possible values are `\"CanNotDelete\"` and `\"ReadOnly\"`.
+- `name` - (Optional) The name of the lock. If not specified, a name will be generated based on the `kind` value. Changing this forces the creation of a new resource.
+DESCRIPTION
+
+  validation {
+    condition     = var.lock != null ? contains(["CanNotDelete", "ReadOnly"], var.lock.kind) : true
+    error_message = "The lock level must be one of: 'None', 'CanNotDelete', or 'ReadOnly'."
+  }
+}
+
+variable "profiles" {
+  type = map(object({
+    name = string
+  }))
+  default     = {}
+  description = <<DESCRIPTION
+A map of NSP profiles to create under the Network Security Perimeter. The map key is deliberately arbitrary to avoid issues where map keys may be unknown at plan time.
+
+- `name` - (Required) The name of the profile. Must follow NSP naming constraints (1-80 chars, alphanumeric with `_`, `.`, `-`).
+DESCRIPTION
+  nullable    = false
+}
+
 variable "resource_associations" {
   type = map(object({
     name                     = string
@@ -124,10 +128,6 @@ DESCRIPTION
     error_message = "The access_mode must be one of: 'Learning', 'Enforced', 'Audit'."
   }
 }
-
-# -------------------------------------------------------------------------
-# AVM required resource interfaces
-# -------------------------------------------------------------------------
 
 variable "role_assignments" {
   type = map(object({

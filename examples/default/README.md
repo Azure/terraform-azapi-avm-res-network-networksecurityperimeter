@@ -6,7 +6,7 @@ This deploys the module in its simplest form.
 
 ```hcl
 terraform {
-  required_version = "~> 1.5"
+  required_version = "~> 1.9"
 
   required_providers {
     azurerm = {
@@ -56,18 +56,40 @@ resource "azurerm_resource_group" "this" {
 }
 
 # This is the module call
-# Do not specify location here due to the randomization above.
-# Leaving location as `null` will cause the module to use the resource group location
-# with a data source.
-module "test" {
+# Example: a Network Security Perimeter with one profile, one inbound access rule,
+# and no resource associations (add resource_associations to link PaaS resources).
+module "network_security_perimeter" {
   source = "../../"
 
-  # source             = "Azure/avm-<res/ptn>-<name>/azurerm"
-  # ...
   location            = azurerm_resource_group.this.location
-  name                = "TODO" # TODO update with module.naming.<RESOURCE_TYPE>.name_unique
+  name                = module.naming.unique-seed # use your own valid NSP name
   resource_group_name = azurerm_resource_group.this.name
-  enable_telemetry    = var.enable_telemetry # see variables.tf
+  # NSP Access Rules - flat map, each rule references a profile via profile_key
+  access_rules = {
+    allow_inbound_corp = {
+      name             = "allow-inbound-corp-subnets"
+      profile_key      = "profile1"
+      direction        = "Inbound"
+      address_prefixes = ["10.0.0.0/8", "172.16.0.0/12"]
+    }
+    allow_outbound_storage = {
+      name                         = "allow-outbound-storage"
+      profile_key                  = "profile1"
+      direction                    = "Outbound"
+      fully_qualified_domain_names = ["*.blob.core.windows.net"]
+    }
+  }
+  enable_telemetry = var.enable_telemetry # see variables.tf
+  # NSP Profiles - flat map, one entry per profile
+  profiles = {
+    profile1 = {
+      name = "default-profile"
+    }
+  }
+  tags = {
+    environment = "example"
+    module      = "avm-res-network-networksecurityperimeter"
+  }
 }
 ```
 
@@ -76,7 +98,7 @@ module "test" {
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (~> 1.5)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (~> 1.9)
 
 - <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.21)
 
@@ -124,17 +146,17 @@ Source: Azure/naming/azurerm
 
 Version: ~> 0.3
 
+### <a name="module_network_security_perimeter"></a> [network\_security\_perimeter](#module\_network\_security\_perimeter)
+
+Source: ../../
+
+Version:
+
 ### <a name="module_regions"></a> [regions](#module\_regions)
 
 Source: Azure/avm-utl-regions/azurerm
 
 Version: ~> 0.1
-
-### <a name="module_test"></a> [test](#module\_test)
-
-Source: ../../
-
-Version:
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection

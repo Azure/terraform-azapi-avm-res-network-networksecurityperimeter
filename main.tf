@@ -8,17 +8,19 @@ data "azurerm_resource_group" "parent" {
 # API version: 2025-05-01
 # -------------------------------------------------------------------------
 resource "azapi_resource" "network_security_perimeter" {
-  type      = "Microsoft.Network/networkSecurityPerimeters@2025-05-01"
+  location  = var.location
   name      = var.name
   parent_id = data.azurerm_resource_group.parent.id
-  location  = var.location
-  tags      = var.tags
-
+  type      = "Microsoft.Network/networkSecurityPerimeters@2025-05-01"
   body = {
     properties = {}
   }
-
+  create_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  read_headers           = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
   response_export_values = ["*"]
+  tags                   = var.tags
+  update_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 }
 
 # -------------------------------------------------------------------------
@@ -28,15 +30,17 @@ resource "azapi_resource" "network_security_perimeter" {
 resource "azapi_resource" "nsp_profile" {
   for_each = var.profiles
 
-  type      = "Microsoft.Network/networkSecurityPerimeters/profiles@2025-05-01"
   name      = each.value.name
   parent_id = azapi_resource.network_security_perimeter.id
-
+  type      = "Microsoft.Network/networkSecurityPerimeters/profiles@2025-05-01"
   body = {
     properties = {}
   }
-
+  create_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  read_headers           = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
   response_export_values = ["*"]
+  update_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 }
 
 # -------------------------------------------------------------------------
@@ -46,10 +50,9 @@ resource "azapi_resource" "nsp_profile" {
 resource "azapi_resource" "nsp_access_rule" {
   for_each = var.access_rules
 
-  type      = "Microsoft.Network/networkSecurityPerimeters/profiles/accessRules@2025-05-01"
   name      = each.value.name
   parent_id = azapi_resource.nsp_profile[each.value.profile_key].id
-
+  type      = "Microsoft.Network/networkSecurityPerimeters/profiles/accessRules@2025-05-01"
   body = {
     properties = {
       addressPrefixes           = each.value.address_prefixes
@@ -61,8 +64,11 @@ resource "azapi_resource" "nsp_access_rule" {
       subscriptions             = [for sub in each.value.subscriptions : { id = sub }]
     }
   }
-
+  create_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  read_headers           = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
   response_export_values = ["*"]
+  update_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 }
 
 # -------------------------------------------------------------------------
@@ -72,10 +78,9 @@ resource "azapi_resource" "nsp_access_rule" {
 resource "azapi_resource" "nsp_resource_association" {
   for_each = var.resource_associations
 
-  type      = "Microsoft.Network/networkSecurityPerimeters/resourceAssociations@2025-05-01"
   name      = each.value.name
   parent_id = azapi_resource.network_security_perimeter.id
-
+  type      = "Microsoft.Network/networkSecurityPerimeters/resourceAssociations@2025-05-01"
   body = {
     properties = {
       accessMode = each.value.access_mode
@@ -87,8 +92,11 @@ resource "azapi_resource" "nsp_resource_association" {
       }
     }
   }
-
+  create_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  read_headers           = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
   response_export_values = ["*"]
+  update_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 }
 
 # -------------------------------------------------------------------------

@@ -54,21 +54,9 @@ resource "azurerm_resource_group" "this" {
 module "network_security_perimeter" {
   source = "../../"
 
-  # source  = "Azure/avm-res-network-networksecurityperimeter/azurerm"
-  # version = "~> 0.1"
-
-  name                = module.naming.unique-seed # use your own valid NSP name
   location            = azurerm_resource_group.this.location
+  name                = module.naming.unique-seed # use your own valid NSP name
   resource_group_name = azurerm_resource_group.this.name
-  enable_telemetry    = var.enable_telemetry # see variables.tf
-
-  # NSP Profiles - flat map, one entry per profile
-  profiles = {
-    profile1 = {
-      name = "default-profile"
-    }
-  }
-
   # NSP Access Rules - flat map, each rule references a profile via profile_key
   access_rules = {
     allow_inbound_corp = {
@@ -84,23 +72,13 @@ module "network_security_perimeter" {
       fully_qualified_domain_names = ["*.blob.core.windows.net"]
     }
   }
-
-  # Resource associations link PaaS resources to this NSP.
-  # Uncomment and fill in the resource ID of a Private Link-enabled PaaS resource.
-  # resource_associations = {
-  #   storage_account = {
-  #     name                     = "assoc-storage"
-  #     private_link_resource_id = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<name>"
-  #     profile_key              = "profile1"
-  #     access_mode              = "Learning"
-  #   }
-  # }
-
-  # Optional: resource lock
-  # lock = {
-  #   kind = "CanNotDelete"
-  # }
-
+  enable_telemetry = var.enable_telemetry # see variables.tf
+  # NSP Profiles - flat map, one entry per profile
+  profiles = {
+    profile1 = {
+      name = "default-profile"
+    }
+  }
   tags = {
     environment = "example"
     module      = "avm-res-network-networksecurityperimeter"
