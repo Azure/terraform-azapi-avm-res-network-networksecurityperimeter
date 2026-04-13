@@ -1,8 +1,3 @@
-# Retrieve the parent resource group to obtain its ID for use as parent_id in azapi resources.
-data "azurerm_resource_group" "parent" {
-  name = var.resource_group_name
-}
-
 # -------------------------------------------------------------------------
 # Core resource: Microsoft.Network/networkSecurityPerimeters
 # API version: 2025-05-01
@@ -10,7 +5,7 @@ data "azurerm_resource_group" "parent" {
 resource "azapi_resource" "network_security_perimeter" {
   location  = var.location
   name      = var.name
-  parent_id = data.azurerm_resource_group.parent.id
+  parent_id = "/subscriptions/${data.azapi_client_config.current.subscription_id}/resourceGroups/${var.resource_group_name}"
   type      = "Microsoft.Network/networkSecurityPerimeters@2025-05-01"
   body = {
     properties = {}
