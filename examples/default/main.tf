@@ -23,6 +23,9 @@ provider "azurerm" {
 module "regions" {
   source  = "Azure/avm-utl-regions/azurerm"
   version = "0.12.0"
+
+  geography_group_filter = "US"
+  region_name_regex      = "^(eastus|eastus2|westus|westus2|westus3|centralus|northcentralus|southcentralus|westcentralus)$"
 }
 
 # This allows us to randomize the region for the resource group.
@@ -55,17 +58,17 @@ module "network_security_perimeter" {
   resource_group_name = azurerm_resource_group.this.name
   # NSP Access Rules - flat map, each rule references a profile via profile_key
   access_rules = {
-    allow_inbound_corp = {
-      name             = "allow-inbound-corp-subnets"
+    allow_inbound_public = {
+      name             = "allow-inbound-public"
       profile_key      = "profile1"
       direction        = "Inbound"
-      address_prefixes = ["10.0.0.0/8", "172.16.0.0/12"]
+      address_prefixes = ["203.0.113.0/24", "198.51.100.0/24"]
     }
     allow_outbound_storage = {
       name                         = "allow-outbound-storage"
       profile_key                  = "profile1"
       direction                    = "Outbound"
-      fully_qualified_domain_names = ["*.blob.core.windows.net"]
+      fully_qualified_domain_names = ["mystorageaccount.blob.core.windows.net"]
     }
   }
   enable_telemetry = var.enable_telemetry # see variables.tf
