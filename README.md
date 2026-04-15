@@ -80,9 +80,6 @@ The following requirements are needed by this module:
 The following resources are used by this module:
 
 - [azapi_resource.network_security_perimeter](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
-- [azapi_resource.nsp_access_rule](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
-- [azapi_resource.nsp_profile](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
-- [azapi_resource.nsp_resource_association](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azurerm_management_lock.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/management_lock) (resource)
 - [azurerm_role_assignment.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) (resource)
 - [modtm_telemetry.telemetry](https://registry.terraform.io/providers/azure/modtm/latest/docs/resources/telemetry) (resource)
@@ -159,6 +156,46 @@ If it is set to false, then no telemetry will be collected.
 Type: `bool`
 
 Default: `true`
+
+### <a name="input_link_references"></a> [link\_references](#input\_link\_references)
+
+Description: A map of NSP link references to manage. Link references are automatically created on the remote NSP when an NSP link is established. All properties are read-only in the current API version. The map key is deliberately arbitrary.
+
+- `name` - (Required) The name of the link reference.
+
+Type:
+
+```hcl
+map(object({
+    name = string
+  }))
+```
+
+Default: `{}`
+
+### <a name="input_links"></a> [links](#input\_links)
+
+Description: A map of NSP links to create. Links connect two Network Security Perimeters to allow traffic between them. The map key is deliberately arbitrary.
+
+- `name` - (Required) The name of the link. Must follow NSP naming constraints (1-80 chars, alphanumeric with `_`, `.`, `-`).
+- `auto_approved_remote_perimeter_resource_id` - (Optional) The resource ID of the remote NSP to auto-approve the link for.
+- `description` - (Optional) A message passed to the owner of the remote NSP link resource to request approval.
+- `local_inbound_profiles` - (Optional) List of local inbound profile names to which inbound traffic is allowed. Use `['*']` to allow inbound to all profiles.
+- `remote_inbound_profiles` - (Optional) List of remote inbound profile names to which inbound traffic is allowed on the remote NSP.
+
+Type:
+
+```hcl
+map(object({
+    name                                       = string
+    auto_approved_remote_perimeter_resource_id = optional(string)
+    description                                = optional(string)
+    local_inbound_profiles                     = optional(list(string), [])
+    remote_inbound_profiles                    = optional(list(string), [])
+  }))
+```
+
+Default: `{}`
 
 ### <a name="input_lock"></a> [lock](#input\_lock)
 
@@ -260,13 +297,25 @@ Default: `null`
 
 The following outputs are exported:
 
+### <a name="output_access_rules"></a> [access\_rules](#output\_access\_rules)
+
+Description: A map of the NSP access rule submodule outputs. Keyed by the map key used in var.access\_rules.
+
+### <a name="output_link_references"></a> [link\_references](#output\_link\_references)
+
+Description: A map of the NSP link reference submodule outputs. Keyed by the map key used in var.link\_references.
+
+### <a name="output_links"></a> [links](#output\_links)
+
+Description: A map of the NSP link submodule outputs. Keyed by the map key used in var.links.
+
 ### <a name="output_name"></a> [name](#output\_name)
 
 Description: The name of the network security perimeter.
 
 ### <a name="output_profiles"></a> [profiles](#output\_profiles)
 
-Description: A map of the NSP profile resources created. Keyed by the map key used in var.profiles.
+Description: A map of the NSP profile submodule outputs. Keyed by the map key used in var.profiles.
 
 ### <a name="output_resource"></a> [resource](#output\_resource)
 
@@ -274,7 +323,7 @@ Description: The full network security perimeter resource object.
 
 ### <a name="output_resource_associations"></a> [resource\_associations](#output\_resource\_associations)
 
-Description: A map of the NSP resource association resources created. Keyed by the map key used in var.resource\_associations.
+Description: A map of the NSP resource association submodule outputs. Keyed by the map key used in var.resource\_associations.
 
 ### <a name="output_resource_id"></a> [resource\_id](#output\_resource\_id)
 
@@ -282,7 +331,37 @@ Description: The resource ID of the network security perimeter.
 
 ## Modules
 
-No modules.
+The following Modules are called:
+
+### <a name="module_nsp_access_rule"></a> [nsp\_access\_rule](#module\_nsp\_access\_rule)
+
+Source: ./modules/access_rule
+
+Version:
+
+### <a name="module_nsp_link"></a> [nsp\_link](#module\_nsp\_link)
+
+Source: ./modules/link
+
+Version:
+
+### <a name="module_nsp_link_reference"></a> [nsp\_link\_reference](#module\_nsp\_link\_reference)
+
+Source: ./modules/link_reference
+
+Version:
+
+### <a name="module_nsp_profile"></a> [nsp\_profile](#module\_nsp\_profile)
+
+Source: ./modules/profile
+
+Version:
+
+### <a name="module_nsp_resource_association"></a> [nsp\_resource\_association](#module\_nsp\_resource\_association)
+
+Source: ./modules/resource_association
+
+Version:
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection
