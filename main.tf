@@ -1,3 +1,7 @@
+# -------------------------------------------------------------------------
+# Core resource: Microsoft.Network/networkSecurityPerimeters
+# API version: 2025-05-01
+# -------------------------------------------------------------------------
 resource "azapi_resource" "network_security_perimeter" {
   location  = var.location
   name      = var.name
@@ -13,4 +17,3 @@ resource "azapi_resource" "network_security_perimeter" {
   tags                   = var.tags
   update_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 }
-
