@@ -81,6 +81,45 @@ DESCRIPTION
   nullable    = false
 }
 
+variable "link_references" {
+  type = map(object({
+    name = string
+  }))
+  default     = {}
+  description = <<DESCRIPTION
+A map of NSP link references to manage. Link references are automatically created on the remote NSP when an NSP link is established. All properties are read-only in the current API version. The map key is deliberately arbitrary.
+
+- `name` - (Required) The name of the link reference.
+DESCRIPTION
+  nullable    = false
+}
+
+variable "links" {
+  type = map(object({
+    name                                       = string
+    auto_approved_remote_perimeter_resource_id = optional(string)
+    description                                = optional(string)
+    local_inbound_profiles                     = optional(list(string), [])
+    remote_inbound_profiles                    = optional(list(string), [])
+  }))
+  default     = {}
+  description = <<DESCRIPTION
+A map of NSP links to create. Links connect two Network Security Perimeters to allow traffic between them. The map key is deliberately arbitrary.
+
+- `name` - (Required) The name of the link. Must follow NSP naming constraints (1-80 chars, alphanumeric with `_`, `.`, `-`).
+- `auto_approved_remote_perimeter_resource_id` - (Optional) The resource ID of the remote NSP to auto-approve the link for.
+- `description` - (Optional) A message passed to the owner of the remote NSP link resource to request approval.
+- `local_inbound_profiles` - (Optional) List of local inbound profile names to which inbound traffic is allowed. Use `['*']` to allow inbound to all profiles.
+- `remote_inbound_profiles` - (Optional) List of remote inbound profile names to which inbound traffic is allowed on the remote NSP.
+DESCRIPTION
+  nullable    = false
+
+  validation {
+    condition     = alltrue([for _, v in var.links : can(regex("(^[a-zA-Z0-9]+[a-zA-Z0-9_.\\-]*[a-zA-Z0-9]+$)|(^[a-zA-Z0-9]$)", v.name)) && length(v.name) <= 80])
+    error_message = "All link names must be 1-80 characters, start and end with an alphanumeric character, and may contain alphanumeric, underscore, period, or hyphen."
+  }
+}
+
 variable "lock" {
   type = object({
     kind = string
