@@ -6,6 +6,7 @@
 # AVM required resource interfaces
 # -------------------------------------------------------------------------
 
+
 variable "location" {
   type        = string
   description = "Azure region where the resource should be deployed."
