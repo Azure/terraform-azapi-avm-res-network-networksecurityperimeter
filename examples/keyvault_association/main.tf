@@ -4,7 +4,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.21"
+      version = "~> 5.1"
     }
     random = {
       source  = "hashicorp/random"
@@ -43,7 +43,7 @@ data "azurerm_client_config" "this" {}
 # Resource group for all resources
 module "resourcegroup" {
   source  = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version = "0.2.2"
+  version = "0.4.0"
 
   location         = module.regions.regions[random_integer.region_index.result].name
   name             = module.naming.resource_group.name_unique
@@ -53,7 +53,7 @@ module "resourcegroup" {
 # Key Vault to be protected by the NSP
 module "keyvault" {
   source  = "Azure/avm-res-keyvault-vault/azurerm"
-  version = "0.10.2"
+  version = "0.11.0"
 
   location            = module.resourcegroup.resource.location
   name                = module.naming.key_vault.name_unique
