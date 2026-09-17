@@ -30,6 +30,7 @@ module "regions" {
   source  = "Azure/avm-utl-regions/azurerm"
   version = "0.12.0"
 
+  enable_telemetry       = false
   geography_group_filter = "US"
   region_name_regex      = "^(eastus|eastus2|westus|westus2|westus3|centralus|northcentralus|southcentralus|westcentralus)$"
 }
@@ -78,7 +79,7 @@ module "network_security_perimeter" {
       fully_qualified_domain_names = ["mystorageaccount.blob.core.windows.net"]
     }
   }
-  enable_telemetry = var.enable_telemetry # see variables.tf
+  enable_telemetry = false # see variables.tf
   # NSP Profiles - flat map, one entry per profile
   profiles = {
     profile1 = {

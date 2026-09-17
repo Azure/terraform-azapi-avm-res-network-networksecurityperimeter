@@ -22,6 +22,7 @@ module "regions" {
   source  = "Azure/avm-utl-regions/azurerm"
   version = "0.12.0"
 
+  enable_telemetry       = false
   geography_group_filter = "US"
   region_name_regex      = "^(eastus|eastus2|westus|westus2|westus3|centralus|northcentralus|southcentralus|westcentralus)$"
 }
@@ -47,7 +48,7 @@ module "resourcegroup" {
 
   location         = module.regions.regions[random_integer.region_index.result].name
   name             = module.naming.resource_group.name_unique
-  enable_telemetry = var.enable_telemetry
+  enable_telemetry = false
 }
 
 # Storage Account to be protected by the NSP
@@ -93,7 +94,7 @@ module "network_security_perimeter" {
       fully_qualified_domain_names = ["login.microsoftonline.com"]
     }
   }
-  enable_telemetry = var.enable_telemetry
+  enable_telemetry = false
   # Profiles: one for blob storage, one for general access
   profiles = {
     blob_profile = {
