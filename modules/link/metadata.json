@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Azure/azure-verified-modules-tools/main/src/Avm.Authoring/Resources/Schemas/v1/avm-module-metadata.schema.json",
+  "moduleDisplayName": "NSP Link Submodule",
+  "moduleDescription": "Manages links between two Network Security Perimeters to allow traffic between them, with configurable local and remote inbound profiles.",
+  "canonicalType": "Microsoft.Network/networkSecurityPerimeters/links",
+  "telemetryIdPrefix": "46d3xtrf.res.21b064c"
+}

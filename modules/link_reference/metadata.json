@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Azure/azure-verified-modules-tools/main/src/Avm.Authoring/Resources/Schemas/v1/avm-module-metadata.schema.json",
+  "moduleDisplayName": "NSP Link Reference Submodule",
+  "moduleDescription": "Manages link references created on the remote Network Security Perimeter when a perimeter link is established. All properties are read-only in the current API version.",
+  "canonicalType": "Microsoft.Network/networkSecurityPerimeters/linkReferences",
+  "telemetryIdPrefix": "46d3xtrf.res.af5ae8b"
+}
