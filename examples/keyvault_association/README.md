@@ -36,7 +36,7 @@ module "regions" {
   source  = "Azure/avm-utl-regions/azurerm"
   version = "0.12.0"
 
-  enable_telemetry       = false
+  enable_telemetry       = var.enable_telemetry
   geography_group_filter = "US"
   region_name_regex      = "^(eastus|eastus2|westus|westus2|westus3|centralus|northcentralus|southcentralus|westcentralus)$"
 }
@@ -62,7 +62,7 @@ module "resourcegroup" {
 
   location         = module.regions.regions[random_integer.region_index.result].name
   name             = module.naming.resource_group.name_unique
-  enable_telemetry = false
+  enable_telemetry = var.enable_telemetry
 }
 
 # Key Vault to be protected by the NSP
@@ -74,7 +74,7 @@ module "keyvault" {
   name                = module.naming.key_vault.name_unique
   resource_group_name = module.resourcegroup.resource.name
   tenant_id           = data.azurerm_client_config.this.tenant_id
-  enable_telemetry    = false
+  enable_telemetry    = var.enable_telemetry
   tags = {
     environment = "example"
   }
@@ -105,7 +105,7 @@ module "network_security_perimeter" {
       ]
     }
   }
-  enable_telemetry = false
+  enable_telemetry = var.enable_telemetry
   # Create a profile for the Key Vault workload
   profiles = {
     keyvault_profile = {
@@ -163,7 +163,7 @@ If it is set to false, then no telemetry will be collected.
 
 Type: `bool`
 
-Default: `true`
+Default: `false`
 
 ## Outputs
 
