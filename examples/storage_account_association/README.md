@@ -59,7 +59,7 @@ data "azurerm_client_config" "this" {}
 # Resource group for all resources
 module "resourcegroup" {
   source  = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version = "0.2.2"
+  version = "0.4.0"
 
   location         = module.regions.regions[random_integer.region_index.result].name
   name             = module.naming.resource_group.name_unique
@@ -200,7 +200,7 @@ Version: 0.12.0
 
 Source: Azure/avm-res-resources-resourcegroup/azurerm
 
-Version: 0.2.2
+Version: 0.4.0
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection
