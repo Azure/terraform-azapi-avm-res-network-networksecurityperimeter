@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Azure/azure-verified-modules-tools/main/src/Avm.Authoring/Resources/Schemas/v1/avm-module-metadata.schema.json",
+  "moduleDisplayName": "NSP Resource Association Submodule",
+  "moduleDescription": "Manages resource associations that link Azure PaaS resources to a Network Security Perimeter with Learning, Enforced, or Audit access modes.",
+  "canonicalType": "Microsoft.Network/networkSecurityPerimeters/resourceAssociations",
+  "telemetryIdPrefix": "46d3xtrf.res.14810af"
+}

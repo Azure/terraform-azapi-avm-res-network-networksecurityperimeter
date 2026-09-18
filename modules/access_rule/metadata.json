@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Azure/azure-verified-modules-tools/main/src/Avm.Authoring/Resources/Schemas/v1/avm-module-metadata.schema.json",
+  "moduleDisplayName": "NSP Access Rule Submodule",
+  "moduleDescription": "Manages access rules that define inbound and outbound network access policies for Network Security Perimeter profiles.",
+  "canonicalType": "Microsoft.Network/networkSecurityPerimeters/profiles/accessRules",
+  "telemetryIdPrefix": "46d3xtrf.res.87c1406"
+}
