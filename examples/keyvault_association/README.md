@@ -70,7 +70,7 @@ data "azurerm_client_config" "this" {}
 # Resource group for all resources
 module "resourcegroup" {
   source    = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version   = "0.2.2"
+  version   = "0.4.0"
   providers = { modtm = modtm }
 
   location         = module.regions.regions[random_integer.region_index.result].name
@@ -81,7 +81,7 @@ module "resourcegroup" {
 # Key Vault to be protected by the NSP
 module "keyvault" {
   source    = "Azure/avm-res-keyvault-vault/azurerm"
-  version   = "0.10.2"
+  version   = "0.12.0"
   providers = { modtm = modtm }
 
   location            = module.resourcegroup.resource.location
@@ -203,7 +203,7 @@ The following Modules are called:
 
 Source: Azure/avm-res-keyvault-vault/azurerm
 
-Version: 0.10.2
+Version: 0.12.0
 
 ### <a name="module_naming"></a> [naming](#module\_naming)
 
@@ -227,7 +227,7 @@ Version: 0.13.0
 
 Source: Azure/avm-res-resources-resourcegroup/azurerm
 
-Version: 0.2.2
+Version: 0.4.0
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection
