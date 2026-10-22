@@ -17,6 +17,7 @@ terraform {
   required_version = "~> 1.9"
 
   required_providers {
+    # tflint-ignore: terraform_unused_required_providers
     azapi = {
       source  = "Azure/azapi"
       version = "~> 2.12"
@@ -25,6 +26,7 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.21"
     }
+    # tflint-ignore: terraform_unused_required_providers
     modtm = {
       source  = "registry.terraform.io/azure/modtm"
       version = "~> 0.3"
@@ -44,9 +46,6 @@ provider "azurerm" {
 module "regions" {
   source  = "Azure/avm-utl-regions/azurerm"
   version = "0.13.0"
-  providers = {
-    azapi = azapi
-  }
 
   location               = var.location
   enable_telemetry       = var.enable_telemetry
@@ -70,9 +69,8 @@ data "azurerm_client_config" "this" {}
 
 # Resource group for all resources
 module "resourcegroup" {
-  source    = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version   = "0.2.2"
-  providers = { modtm = modtm }
+  source  = "Azure/avm-res-resources-resourcegroup/azurerm"
+  version = "0.2.2"
 
   location         = module.regions.regions[random_integer.region_index.result].name
   name             = module.naming.resource_group.name_unique
