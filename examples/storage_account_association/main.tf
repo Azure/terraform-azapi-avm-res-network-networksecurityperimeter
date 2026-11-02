@@ -30,7 +30,7 @@ provider "azurerm" {
 ## Section to provide a random Azure region for the resource group
 module "regions" {
   source  = "Azure/avm-utl-regions/azurerm"
-  version = "0.13.0"
+  version = "0.13.2"
 
   location               = var.location
   enable_telemetry       = var.enable_telemetry
@@ -47,7 +47,7 @@ resource "random_integer" "region_index" {
 
 module "naming" {
   source  = "Azure/avm-utl-naming/azure"
-  version = "0.2.0"
+  version = "0.3.0"
 }
 
 data "azurerm_client_config" "this" {}
@@ -55,7 +55,7 @@ data "azurerm_client_config" "this" {}
 # Resource group for all resources
 module "resourcegroup" {
   source  = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version = "0.2.2"
+  version = "0.4.0"
 
   location         = module.regions.regions[random_integer.region_index.result].name
   name             = module.naming.resource_group.name_unique
