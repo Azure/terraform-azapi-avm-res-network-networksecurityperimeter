@@ -35,12 +35,6 @@ Description: Direction of the access rule. Possible values: `Inbound`, `Outbound
 
 Type: `string`
 
-### <a name="input_location"></a> [location](#input\_location)
-
-Description: The Azure region for this module's resources or telemetry deployment.
-
-Type: `string`
-
 ### <a name="input_name"></a> [name](#input\_name)
 
 Description: The name of the access rule. Must be 1-80 characters, start and end with alphanumeric, and may contain alphanumeric, underscore, period, or hyphen.
@@ -90,6 +84,14 @@ Description: List of outbound FQDNs. Applicable for `Outbound` rules.
 Type: `list(string)`
 
 Default: `[]`
+
+### <a name="input_location"></a> [location](#input\_location)
+
+Description: The Azure region for this module's resources or telemetry deployment.
+
+Type: `string`
+
+Default: `null`
 
 ### <a name="input_phone_numbers"></a> [phone\_numbers](#input\_phone\_numbers)
 
