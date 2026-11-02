@@ -8,12 +8,6 @@ variable "direction" {
   }
 }
 
-variable "location" {
-  type        = string
-  description = "The Azure region for this module's resources or telemetry deployment."
-  nullable    = false
-}
-
 variable "name" {
   type        = string
   description = "The name of the access rule. Must be 1-80 characters, start and end with alphanumeric, and may contain alphanumeric, underscore, period, or hyphen."
@@ -56,6 +50,17 @@ variable "fully_qualified_domain_names" {
   type        = list(string)
   default     = []
   description = "List of outbound FQDNs. Applicable for `Outbound` rules."
+}
+
+variable "location" {
+  type        = string
+  default     = null
+  description = "The Azure region for this module's resources or telemetry deployment."
+
+  validation {
+    condition     = !var.enable_telemetry || var.location != null
+    error_message = "The location must not be null when telemetry is enabled."
+  }
 }
 
 variable "phone_numbers" {
