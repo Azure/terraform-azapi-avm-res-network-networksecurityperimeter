@@ -18,9 +18,15 @@ variable "name" {
   }
 }
 
-variable "profile_resource_id" {
+variable "parent_id" {
   type        = string
   description = "The resource ID of the parent NSP profile."
+  nullable    = false
+
+  validation {
+    condition     = can(provider::azapi::parse_resource_id("Microsoft.Network/networkSecurityPerimeters/profiles", var.parent_id))
+    error_message = "`parent_id` must be a valid NSP profile resource ID."
+  }
 }
 
 variable "address_prefixes" {
@@ -79,4 +85,9 @@ variable "subscriptions" {
   type        = list(string)
   default     = []
   description = "List of subscription IDs (ARM format: `/subscriptions/{id}`) for cross-subscription inbound access."
+
+  validation {
+    condition     = alltrue([for id in var.subscriptions : can(provider::azapi::parse_resource_id("Microsoft.Resources/subscriptions", id))])
+    error_message = "Each subscription must be a fully-qualified subscription resource ID."
+  }
 }

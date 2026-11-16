@@ -5,13 +5,34 @@
 This submodule manages links for a Network Security Perimeter (`Microsoft.Network/networkSecurityPerimeters/links`).
 
 Links connect two Network Security Perimeters to allow traffic between them, with configurable local and remote inbound profiles.
+## Extension ownership
+
+Canonical `lock` and `role_assignments` apply to the link scope.
+`remote_perimeter_extensions` manages only remote-perimeter extensions.
+Its `lock_inheritance_enabled` defaults true: an explicit target lock overrides
+the owning module lock; false disables it even with an override.
+Standalone calls inherit the link lock; root calls inherit the primary perimeter
+lock. Remote RBAC is never automatic.
+
+The remote perimeter's configuration, tags and lifecycle remain external.
+Manual links without a remote ARM ID cannot manage remote extensions and must
+disable remote lock inheritance when an inherited lock would otherwise apply.
+Existing extensions require opt-out or deliberate adoption. Remove applicable
+locks in a separate approved apply before selective replacement or ReadOnly
+updates; restore them only after the inspected change.
+
+The owning module directly declares separate child and target lock/RBAC blocks,
+using the interfaces utility for canonical configuration. Direct
+`authorization_locks` and `authorization_role_assignments` controls apply uniformly
+to both scopes; `authorization_role_definitions` controls stable role lookups.
+Tested API defaults belong here, not in the parent.
 
 <!-- markdownlint-disable MD033 -->
 ## Requirements
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.9, < 2.0)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.11.0, < 2.0.0)
 
 - <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
 
@@ -19,10 +40,17 @@ The following requirements are needed by this module:
 
 The following resources are used by this module:
 
+- [azapi_resource.lock](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.role_assignments](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.target_lock](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.target_role_assignments](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.this](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [terraform_data.extension_ownership](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
+- [terraform_data.remote_scope](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [terraform_data.telemetry](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [azapi_client_config.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
+- [azapi_resource_list.role_definitions](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/resource_list) (data source)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs
@@ -35,7 +63,7 @@ Description: The name of the NSP link. Must be 1-80 characters, start and end wi
 
 Type: `string`
 
-### <a name="input_network_security_perimeter_resource_id"></a> [network\_security\_perimeter\_resource\_id](#input\_network\_security\_perimeter\_resource\_id)
+### <a name="input_parent_id"></a> [parent\_id](#input\_parent\_id)
 
 Description: The resource ID of the parent Network Security Perimeter.
 
@@ -71,6 +99,22 @@ Type: `bool`
 
 Default: `true`
 
+### <a name="input_ignore_body_changes"></a> [ignore\_body\_changes](#input\_ignore\_body\_changes)
+
+Description: Body-relative dot-notation paths: `network_network_security_perimeters_links` for the link; `authorization_locks` for child and remote locks; `authorization_role_assignments` for child and remote RBAC. Same ARM-kind resources share one field, applied uniformly to both scopes. Ignored configuration is not sent to Azure; changes take effect after apply. List indices are unsupported.
+
+Type:
+
+```hcl
+object({
+    network_network_security_perimeters_links = optional(list(string), [])
+    authorization_locks                       = optional(list(string), [])
+    authorization_role_assignments            = optional(list(string), [])
+  })
+```
+
+Default: `{}`
+
 ### <a name="input_local_inbound_profiles"></a> [local\_inbound\_profiles](#input\_local\_inbound\_profiles)
 
 Description: List of local inbound profile names to which inbound traffic is allowed. Use `['*']` to allow inbound to all profiles.
@@ -87,6 +131,26 @@ Type: `string`
 
 Default: `null`
 
+### <a name="input_lock"></a> [lock](#input\_lock)
+
+Description: Controls the Resource Lock configuration for this resource. The following properties can be specified:
+
+- `kind` - (Required) The type of lock. Possible values are `\"CanNotDelete\"` and `\"ReadOnly\"`.
+- `name` - (Optional) The name of the lock. If not specified, a name will be generated based on the `kind` value. Changing this forces the creation of a new resource.
+- `notes` - (Optional) Notes about the lock. This value maps to `Microsoft.Authorization/locks.properties.notes`.
+
+Type:
+
+```hcl
+object({
+    kind  = string
+    name  = optional(string, null)
+    notes = optional(string, null)
+  })
+```
+
+Default: `null`
+
 ### <a name="input_remote_inbound_profiles"></a> [remote\_inbound\_profiles](#input\_remote\_inbound\_profiles)
 
 Description: List of remote inbound profile names to which inbound traffic is allowed. Use `['*']` to allow inbound to all profiles on the remote NSP.
@@ -95,9 +159,127 @@ Type: `list(string)`
 
 Default: `[]`
 
+### <a name="input_remote_perimeter_extensions"></a> [remote\_perimeter\_extensions](#input\_remote\_perimeter\_extensions)
+
+Description: Extensions only on the externally owned auto\_approved\_remote\_perimeter\_resource\_id. `lock_inheritance_enabled` defaults true: explicit `lock` overrides the owning module lock; false disables the lock even with an override. `role_assignments` uses the canonical RBAC fields and defaults empty (no automatic permissions). Existing extensions require opt-out or deliberate import.
+
+Type:
+
+```hcl
+object({
+    lock_inheritance_enabled = optional(bool, true)
+    lock = optional(object({
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
+    }))
+    role_assignments = optional(map(object({
+      name                                   = optional(string, null)
+      role_definition_id_or_name             = string
+      principal_id                           = string
+      description                            = optional(string, null)
+      skip_service_principal_aad_check       = optional(bool, false)
+      condition                              = optional(string, null)
+      condition_version                      = optional(string, null)
+      delegated_managed_identity_resource_id = optional(string, null)
+      principal_type                         = optional(string, null)
+    })), {})
+  })
+```
+
+Default: `{}`
+
+### <a name="input_resource_types"></a> [resource\_types](#input\_resource\_types)
+
+Description: AzAPI types and tested API defaults owned here: `network_network_security_perimeters_links` for the link; `authorization_locks` for child and remote locks; `authorization_role_assignments` for child and remote RBAC; `authorization_role_definitions` for stable-scope lookups. Same ARM-kind resources share a uniform override.
+
+Type:
+
+```hcl
+object({
+    network_network_security_perimeters_links = optional(string, "Microsoft.Network/networkSecurityPerimeters/links@2025-05-01")
+    authorization_locks                       = optional(string, "Microsoft.Authorization/locks@2020-05-01")
+    authorization_role_assignments            = optional(string, "Microsoft.Authorization/roleAssignments@2022-04-01")
+    authorization_role_definitions            = optional(string, "Microsoft.Authorization/roleDefinitions@2022-04-01")
+  })
+```
+
+Default: `{}`
+
+### <a name="input_retry"></a> [retry](#input\_retry)
+
+Description: Retry settings: `error_message_regex` selects retryable errors; `interval_seconds` and `max_interval_seconds` control initial and maximum delay.
+
+Type:
+
+```hcl
+object({
+    error_message_regex  = optional(list(string))
+    interval_seconds     = optional(number)
+    max_interval_seconds = optional(number)
+  })
+```
+
+Default: `null`
+
+### <a name="input_role_assignments"></a> [role\_assignments](#input\_role\_assignments)
+
+Description: A map of role assignments to create on the NSP link. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+
+- `name` - (Optional) The name of the role assignment. If not set, a random UUID will be generated. Changing this forces the creation of a new resource.
+- `role_definition_id_or_name` - The ID or name of the role definition to assign to the principal.
+- `principal_id` - The ID of the principal to assign the role to.
+- `description` - (Optional) The description of the role assignment.
+- `skip_service_principal_aad_check` - (Optional) If set to true, skips the Azure Active Directory check for the service principal in the tenant. Defaults to false.
+- `condition` - (Optional) The condition which will be used to scope the role assignment.
+- `condition_version` - (Optional) The version of the condition syntax. Leave as `null` if you are not using a condition, if you are then valid values are '2.0'.
+- `delegated_managed_identity_resource_id` - (Optional) The delegated Azure Resource Id which contains a Managed Identity. Changing this forces a new resource to be created. This field is only used in cross-tenant scenario.
+- `principal_type` - (Optional) The type of the `principal_id`. Possible values are `User`, `Group` and `ServicePrincipal`. It is necessary to explicitly set this attribute when creating role assignments if the principal creating the assignment is constrained by ABAC rules that filters on the PrincipalType attribute.
+
+> Note: only set `skip_service_principal_aad_check` to true if you are assigning a role to a service principal.
+
+Type:
+
+```hcl
+map(object({
+    name                                   = optional(string, null)
+    role_definition_id_or_name             = string
+    principal_id                           = string
+    description                            = optional(string, null)
+    skip_service_principal_aad_check       = optional(bool, false)
+    condition                              = optional(string, null)
+    condition_version                      = optional(string, null)
+    delegated_managed_identity_resource_id = optional(string, null)
+    principal_type                         = optional(string, null)
+  }))
+```
+
+Default: `{}`
+
+### <a name="input_timeouts"></a> [timeouts](#input\_timeouts)
+
+Description: Go duration timeouts: `create`, `read`, `update`, and `delete`. Null uses provider defaults.
+
+Type:
+
+```hcl
+object({
+    create = optional(string)
+    read   = optional(string)
+    update = optional(string)
+    delete = optional(string)
+  })
+```
+
+Default: `null`
+
 ## Outputs
 
 The following outputs are exported:
+
+### <a name="output_extension_resource_ids"></a> [extension\_resource\_ids](#output\_extension\_resource\_ids)
+
+Description: Link and externally owned remote-perimeter extension IDs.
 
 ### <a name="output_name"></a> [name](#output\_name)
 
@@ -105,7 +287,7 @@ Description: The name of the NSP link.
 
 ### <a name="output_resource"></a> [resource](#output\_resource)
 
-Description: The full NSP link resource object.
+Description: Stable link identity attributes.
 
 ### <a name="output_resource_id"></a> [resource\_id](#output\_resource\_id)
 
@@ -113,7 +295,13 @@ Description: The resource ID of the NSP link.
 
 ## Modules
 
-No modules.
+The following Modules are called:
+
+### <a name="module_avm"></a> [avm](#module\_avm)
+
+Source: Azure/avm-utl-interfaces/azure
+
+Version: 0.10.0
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection

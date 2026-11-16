@@ -8,15 +8,26 @@ variable "name" {
   }
 }
 
-variable "network_security_perimeter_resource_id" {
+variable "parent_id" {
   type        = string
   description = "The resource ID of the parent Network Security Perimeter."
+  nullable    = false
+
+  validation {
+    condition     = can(provider::azapi::parse_resource_id("Microsoft.Network/networkSecurityPerimeters", var.parent_id))
+    error_message = "`parent_id` must be a valid Network Security Perimeter resource ID."
+  }
 }
 
 variable "auto_approved_remote_perimeter_resource_id" {
   type        = string
   default     = null
   description = "The resource ID of the remote NSP to auto-approve the link for."
+
+  validation {
+    condition     = var.auto_approved_remote_perimeter_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.Network/networkSecurityPerimeters", var.auto_approved_remote_perimeter_resource_id))
+    error_message = "The remote perimeter must be a valid Network Security Perimeter resource ID, or null."
+  }
 }
 
 variable "description" {

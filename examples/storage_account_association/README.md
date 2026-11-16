@@ -12,92 +12,71 @@ The example creates:
 - An outbound access rule allowing FQDN-based access
 - A Storage Account associated with the NSP profile in `Learning` mode
 
+The AzAPI-only setup uses Standard\_ZRS, TLS 1.2, HTTPS-only traffic, disabled
+public network access, disabled anonymous blobs and disabled shared keys.
+Learning mode is observational; this example does not claim NSP enforcement.
+Choose an authorized region supporting NSP and storage ZRS before deployment.
+Local mocked tests do not establish Azure persistence or cleanup.
+The association has its own lock; the storage target explicitly opts out of
+perimeter lock inheritance but explicitly requests Reader RBAC using the caller
+identity. The NSP module never writes storage configuration/tags/lifecycle.
+This configuration has not been deployed.
+
+Association-scoped and target-scoped extensions are separate direct AzAPI
+resources in the association submodule. Its ARM-kind control fields apply
+uniformly to both scopes, without transferring storage ownership.
+
 ```hcl
-terraform {
-  required_version = "~> 1.9"
+data "azapi_client_config" "this" {}
 
-  required_providers {
-    # tflint-ignore: terraform_unused_required_providers
-    azapi = {
-      source  = "Azure/azapi"
-      version = "~> 2.12"
-    }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.21"
-    }
-    # tflint-ignore: terraform_unused_required_providers
-    modtm = {
-      source  = "registry.terraform.io/azure/modtm"
-      version = "~> 0.3"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
-    }
-  }
+resource "random_string" "suffix" {
+  length  = 12
+  lower   = true
+  numeric = true
+  special = false
+  upper   = false
 }
 
-provider "azurerm" {
-  features {}
-}
-
-## Section to provide a random Azure region for the resource group
-module "regions" {
-  source  = "Azure/avm-utl-regions/azurerm"
-  version = "0.13.0"
-
+resource "azapi_resource" "resource_group" {
   location               = var.location
-  enable_telemetry       = var.enable_telemetry
-  geography_group_filter = "US"
-  region_name_regex      = "^(eastus|eastus2|westus|westus2|westus3|centralus|northcentralus|southcentralus|westcentralus)$"
+  name                   = "rg-nsp-storage-${random_string.suffix.result}"
+  parent_id              = data.azapi_client_config.this.subscription_resource_id
+  type                   = "Microsoft.Resources/resourceGroups@2024-03-01"
+  body                   = {}
+  response_export_values = []
 }
 
-resource "random_integer" "region_index" {
-  max = length(module.regions.regions) - 1
-  min = 0
-}
-
-## End of section to provide a random Azure region for the resource group
-
-module "naming" {
-  source  = "Azure/avm-utl-naming/azure"
-  version = "0.2.0"
-}
-
-data "azurerm_client_config" "this" {}
-
-# Resource group for all resources
-module "resourcegroup" {
-  source  = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version = "0.2.2"
-
-  location         = module.regions.regions[random_integer.region_index.result].name
-  name             = module.naming.resource_group.name_unique
-  enable_telemetry = var.enable_telemetry
-}
-
-# Storage Account to be protected by the NSP
-resource "azurerm_storage_account" "this" {
-  account_replication_type = "ZRS"
-  account_tier             = "Standard"
-  location                 = module.resourcegroup.resource.location
-  name                     = module.naming.storage_account.name_unique
-  resource_group_name      = module.resourcegroup.resource.name
-  tags = {
-    environment = "example"
+resource "azapi_resource" "storage_account" {
+  location  = var.location
+  name      = "st${random_string.suffix.result}"
+  parent_id = azapi_resource.resource_group.id
+  type      = "Microsoft.Storage/storageAccounts@2025-01-01"
+  body = {
+    kind = "StorageV2"
+    sku  = { name = "Standard_ZRS" }
+    properties = {
+      accessTier                   = "Hot"
+      allowBlobPublicAccess        = false
+      allowSharedKeyAccess         = false
+      defaultToOAuthAuthentication = true
+      minimumTlsVersion            = "TLS1_2"
+      publicNetworkAccess          = "Disabled"
+      supportsHttpsTrafficOnly     = true
+      networkAcls = {
+        bypass        = "None"
+        defaultAction = "Deny"
+      }
+    }
   }
+  response_export_values = []
 }
 
-# Network Security Perimeter protecting the Storage Account
 module "network_security_perimeter" {
   source = "../../"
 
-  location            = module.resourcegroup.resource.location
-  name                = module.naming.unique-seed
-  resource_group_name = module.resourcegroup.resource.name
-  # Inbound: allow a corporate IP range and the deployer's subscription
-  # Outbound: allow the storage account to reach a specific FQDN
+  location  = var.location
+  name      = "nsp-${random_string.suffix.result}"
+  parent_id = azapi_resource.resource_group.id
   access_rules = {
     allow_inbound_corp = {
       name             = "allow-inbound-corp"
@@ -106,12 +85,10 @@ module "network_security_perimeter" {
       address_prefixes = ["203.0.113.0/24"]
     }
     allow_inbound_subscription = {
-      name        = "allow-inbound-subscription"
-      profile_key = "blob_profile"
-      direction   = "Inbound"
-      subscriptions = [
-        "/subscriptions/${data.azurerm_client_config.this.subscription_id}"
-      ]
+      name          = "allow-inbound-subscription"
+      profile_key   = "blob_profile"
+      direction     = "Inbound"
+      subscriptions = [data.azapi_client_config.this.subscription_resource_id]
     }
     allow_outbound_fqdn = {
       name                         = "allow-outbound-fqdn"
@@ -121,19 +98,26 @@ module "network_security_perimeter" {
     }
   }
   enable_telemetry = var.enable_telemetry
-  # Profiles: one for blob storage, one for general access
+  lock             = { kind = "CanNotDelete" }
   profiles = {
-    blob_profile = {
-      name = "blob-storage-profile"
-    }
+    blob_profile = { name = "blob-storage-profile" }
   }
-  # Associate the Storage Account with the NSP in Learning mode
   resource_associations = {
     storage = {
       name                     = "storage-association"
       profile_key              = "blob_profile"
-      private_link_resource_id = azurerm_storage_account.this.id
+      private_link_resource_id = azapi_resource.storage_account.id
       access_mode              = "Learning"
+      lock                     = { kind = "CanNotDelete", name = "association-lock" }
+      private_link_resource_extensions = {
+        lock_inheritance_enabled = false
+        role_assignments = {
+          reader = {
+            role_definition_id_or_name = "Reader"
+            principal_id               = data.azapi_client_config.this.object_id
+          }
+        }
+      }
     }
   }
   tags = {
@@ -148,13 +132,9 @@ module "network_security_perimeter" {
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (~> 1.9)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.11.0, < 2.0.0)
 
 - <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
-
-- <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.21)
-
-- <a name="requirement_modtm"></a> [modtm](#requirement\_modtm) (~> 0.3)
 
 - <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.5)
 
@@ -162,9 +142,10 @@ The following requirements are needed by this module:
 
 The following resources are used by this module:
 
-- [azurerm_storage_account.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account) (resource)
-- [random_integer.region_index](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/integer) (resource)
-- [azurerm_client_config.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/client_config) (data source)
+- [azapi_resource.resource_group](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.storage_account](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [random_string.suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) (resource)
+- [azapi_client_config.this](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs
@@ -201,29 +182,11 @@ No outputs.
 
 The following Modules are called:
 
-### <a name="module_naming"></a> [naming](#module\_naming)
-
-Source: Azure/avm-utl-naming/azure
-
-Version: 0.2.0
-
 ### <a name="module_network_security_perimeter"></a> [network\_security\_perimeter](#module\_network\_security\_perimeter)
 
 Source: ../../
 
 Version:
-
-### <a name="module_regions"></a> [regions](#module\_regions)
-
-Source: Azure/avm-utl-regions/azurerm
-
-Version: 0.13.0
-
-### <a name="module_resourcegroup"></a> [resourcegroup](#module\_resourcegroup)
-
-Source: Azure/avm-res-resources-resourcegroup/azurerm
-
-Version: 0.2.2
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection

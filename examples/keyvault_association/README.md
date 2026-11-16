@@ -8,98 +8,76 @@ The example creates:
 
 - A Network Security Perimeter with a profile
 - An inbound access rule allowing a specific public IP range
-- An outbound access rule allowing FQDN-based access
+- An inbound access rule allowing same-subscription access
 - A Key Vault associated with the NSP profile in `Learning` mode
 
+The Key Vault's public network access is disabled and RBAC authorization, soft
+delete and purge protection are enabled. NSP Learning mode is observational,
+not an assertion that NSP enforcement has been tested. There are no data-plane
+operations or public-access exceptions in the setup.
+
+Purge protection retains a soft-deleted vault for at least seven days; normal
+Terraform destroy does not purge it. A future E2E authorization must explicitly
+cover this retention and its owner. No Azure deployment, persistence or cleanup
+has been verified for this local candidate.
+The perimeter lock is inherited onto the externally owned Key Vault target;
+Reader RBAC is explicitly requested on that target using the caller identity.
+The NSP module owns only the association and its target extensions, not the
+vault's configuration or lifecycle. These interactions have not been deployed.
+
+The association submodule directly declares its target lock and RBAC resources;
+the interfaces utility supplies canonical configuration only. The Key Vault
+remains owned by this example, not by the association or utility.
+
 ```hcl
-terraform {
-  required_version = "~> 1.9"
+data "azapi_client_config" "this" {}
 
-  required_providers {
-    # tflint-ignore: terraform_unused_required_providers
-    azapi = {
-      source  = "Azure/azapi"
-      version = "~> 2.12"
-    }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.21"
-    }
-    # tflint-ignore: terraform_unused_required_providers
-    modtm = {
-      source  = "registry.terraform.io/azure/modtm"
-      version = "~> 0.3"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
-    }
-  }
+resource "random_string" "suffix" {
+  length  = 12
+  lower   = true
+  numeric = true
+  special = false
+  upper   = false
 }
 
-provider "azurerm" {
-  features {}
-}
-
-## Section to provide a random Azure region for the resource group
-module "regions" {
-  source  = "Azure/avm-utl-regions/azurerm"
-  version = "0.13.0"
-
+resource "azapi_resource" "resource_group" {
   location               = var.location
-  enable_telemetry       = var.enable_telemetry
-  geography_group_filter = "US"
-  region_name_regex      = "^(eastus|eastus2|westus|westus2|westus3|centralus|northcentralus|southcentralus|westcentralus)$"
+  name                   = "rg-nsp-kv-${random_string.suffix.result}"
+  parent_id              = data.azapi_client_config.this.subscription_resource_id
+  type                   = "Microsoft.Resources/resourceGroups@2024-03-01"
+  body                   = {}
+  response_export_values = []
 }
 
-resource "random_integer" "region_index" {
-  max = length(module.regions.regions) - 1
-  min = 0
-}
-
-## End of section to provide a random Azure region for the resource group
-
-module "naming" {
-  source  = "Azure/avm-utl-naming/azure"
-  version = "0.2.0"
-}
-
-data "azurerm_client_config" "this" {}
-
-# Resource group for all resources
-module "resourcegroup" {
-  source  = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version = "0.2.2"
-
-  location         = module.regions.regions[random_integer.region_index.result].name
-  name             = module.naming.resource_group.name_unique
-  enable_telemetry = var.enable_telemetry
-}
-
-# Key Vault to be protected by the NSP
-module "keyvault" {
-  source  = "Azure/avm-res-keyvault-vault/azurerm"
-  version = "0.10.2"
-
-  location            = module.resourcegroup.resource.location
-  name                = module.naming.key_vault.name_unique
-  resource_group_name = module.resourcegroup.resource.name
-  tenant_id           = data.azurerm_client_config.this.tenant_id
-  enable_telemetry    = var.enable_telemetry
-  tags = {
-    environment = "example"
+resource "azapi_resource" "key_vault" {
+  location  = var.location
+  name      = "kv${random_string.suffix.result}"
+  parent_id = azapi_resource.resource_group.id
+  type      = "Microsoft.KeyVault/vaults@2024-11-01"
+  body = {
+    properties = {
+      tenantId                  = data.azapi_client_config.this.tenant_id
+      sku                       = { family = "A", name = "standard" }
+      enableRbacAuthorization   = true
+      enableSoftDelete          = true
+      enablePurgeProtection     = true
+      softDeleteRetentionInDays = 7
+      publicNetworkAccess       = "Disabled"
+      networkAcls = {
+        bypass        = "None"
+        defaultAction = "Deny"
+      }
+    }
   }
+  response_export_values = []
 }
 
-# Network Security Perimeter protecting the Key Vault
 module "network_security_perimeter" {
   source = "../../"
 
-  location            = module.resourcegroup.resource.location
-  name                = module.naming.unique-seed
-  resource_group_name = module.resourcegroup.resource.name
-  # Inbound: allow access from a known public IP range (e.g., corporate egress)
-  # Outbound: allow the Key Vault to reach a specific FQDN
+  location  = var.location
+  name      = "nsp-${random_string.suffix.result}"
+  parent_id = azapi_resource.resource_group.id
   access_rules = {
     allow_inbound_corp_egress = {
       name             = "allow-inbound-corp-egress"
@@ -108,28 +86,31 @@ module "network_security_perimeter" {
       address_prefixes = ["203.0.113.0/24"]
     }
     allow_inbound_subscription = {
-      name        = "allow-inbound-subscription"
-      profile_key = "keyvault_profile"
-      direction   = "Inbound"
-      subscriptions = [
-        "/subscriptions/${data.azurerm_client_config.this.subscription_id}"
-      ]
+      name          = "allow-inbound-subscription"
+      profile_key   = "keyvault_profile"
+      direction     = "Inbound"
+      subscriptions = [data.azapi_client_config.this.subscription_resource_id]
     }
   }
   enable_telemetry = var.enable_telemetry
-  # Create a profile for the Key Vault workload
+  lock             = { kind = "CanNotDelete", name = "perimeter-and-target-lock" }
   profiles = {
-    keyvault_profile = {
-      name = "keyvault-profile"
-    }
+    keyvault_profile = { name = "keyvault-profile" }
   }
-  # Associate the Key Vault with the NSP profile
   resource_associations = {
     keyvault = {
       name                     = "keyvault-association"
       profile_key              = "keyvault_profile"
-      private_link_resource_id = module.keyvault.resource_id
+      private_link_resource_id = azapi_resource.key_vault.id
       access_mode              = "Learning"
+      private_link_resource_extensions = {
+        role_assignments = {
+          reader = {
+            role_definition_id_or_name = "Reader"
+            principal_id               = data.azapi_client_config.this.object_id
+          }
+        }
+      }
     }
   }
   tags = {
@@ -144,13 +125,9 @@ module "network_security_perimeter" {
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (~> 1.9)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.11.0, < 2.0.0)
 
 - <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
-
-- <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.21)
-
-- <a name="requirement_modtm"></a> [modtm](#requirement\_modtm) (~> 0.3)
 
 - <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.5)
 
@@ -158,8 +135,10 @@ The following requirements are needed by this module:
 
 The following resources are used by this module:
 
-- [random_integer.region_index](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/integer) (resource)
-- [azurerm_client_config.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/client_config) (data source)
+- [azapi_resource.key_vault](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.resource_group](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [random_string.suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) (resource)
+- [azapi_client_config.this](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs
@@ -196,35 +175,11 @@ No outputs.
 
 The following Modules are called:
 
-### <a name="module_keyvault"></a> [keyvault](#module\_keyvault)
-
-Source: Azure/avm-res-keyvault-vault/azurerm
-
-Version: 0.10.2
-
-### <a name="module_naming"></a> [naming](#module\_naming)
-
-Source: Azure/avm-utl-naming/azure
-
-Version: 0.2.0
-
 ### <a name="module_network_security_perimeter"></a> [network\_security\_perimeter](#module\_network\_security\_perimeter)
 
 Source: ../../
 
 Version:
-
-### <a name="module_regions"></a> [regions](#module\_regions)
-
-Source: Azure/avm-utl-regions/azurerm
-
-Version: 0.13.0
-
-### <a name="module_resourcegroup"></a> [resourcegroup](#module\_resourcegroup)
-
-Source: Azure/avm-res-resources-resourcegroup/azurerm
-
-Version: 0.2.2
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection
