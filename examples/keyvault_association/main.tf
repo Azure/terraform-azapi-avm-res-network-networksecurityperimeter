@@ -11,11 +11,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.21"
     }
-    # tflint-ignore: terraform_unused_required_providers
-    modtm = {
-      source  = "registry.terraform.io/azure/modtm"
-      version = "~> 0.3"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.5"
@@ -55,7 +50,7 @@ data "azurerm_client_config" "this" {}
 # Resource group for all resources
 module "resourcegroup" {
   source  = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version = "0.2.2"
+  version = "0.5.0"
 
   location         = module.regions.regions[random_integer.region_index.result].name
   name             = module.naming.resource_group.name_unique
@@ -65,13 +60,13 @@ module "resourcegroup" {
 # Key Vault to be protected by the NSP
 module "keyvault" {
   source  = "Azure/avm-res-keyvault-vault/azurerm"
-  version = "0.10.2"
+  version = "0.13.1"
 
-  location            = module.resourcegroup.resource.location
-  name                = module.naming.key_vault.name_unique
-  resource_group_name = module.resourcegroup.resource.name
-  tenant_id           = data.azurerm_client_config.this.tenant_id
-  enable_telemetry    = var.enable_telemetry
+  location         = module.resourcegroup.resource.location
+  name             = module.naming.key_vault.name_unique
+  parent_id        = module.resourcegroup.resource_id
+  tenant_id        = data.azurerm_client_config.this.tenant_id
+  enable_telemetry = var.enable_telemetry
   tags = {
     environment = "example"
   }

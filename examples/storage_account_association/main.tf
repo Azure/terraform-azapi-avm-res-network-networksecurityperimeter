@@ -11,11 +11,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.21"
     }
-    # tflint-ignore: terraform_unused_required_providers
-    modtm = {
-      source  = "registry.terraform.io/azure/modtm"
-      version = "~> 0.3"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.5"
@@ -55,7 +50,7 @@ data "azurerm_client_config" "this" {}
 # Resource group for all resources
 module "resourcegroup" {
   source  = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version = "0.2.2"
+  version = "0.5.0"
 
   location         = module.regions.regions[random_integer.region_index.result].name
   name             = module.naming.resource_group.name_unique
