@@ -61,9 +61,10 @@ module "network_security_perimeter" {
 
 ## Compatibility and operational limits
 
-This local candidate is a breaking refactor from v0.1.0, not a released or
-Azure-verified upgrade. Read [the upgrade guide](UPGRADE.md) before changing an
-existing deployment. Terraform >=1.11.0 and AzAPI >=2.12, <3.0 are required.
+This candidate is an unreleased breaking refactor. Read
+[the upgrade guide](UPGRADE.md) for version-specific state moves, bounded Azure
+verification and unverified paths before changing an existing deployment.
+Terraform >=1.11.0 and AzAPI >=2.12, <3.0 are required.
 
 Writable children remain independently consumable, single-instance submodules;
 the parent owns map cardinality. `parent_id` replaces scope-name inputs.
@@ -186,3 +187,11 @@ descendant teardown **including full module destroy**. Apply ReadOnly profile
 locks only after descendant creation. This staged contract also applies to
 standalone profiles whose descendants another configuration manages.
 Do not infer automatic locked teardown or propagation proof from mocked tests.
+## Upgrading existing deployments
+
+Released **v0.2.0 introduced breaking child addresses and output shapes** relative
+to v0.1.0; this candidate introduces further interface and ownership changes.
+Follow the [upgrade guide](UPGRADE.md) for your exact starting version.
+Do not replay already-completed moves. A version bump alone does not preserve
+state, and the bounded v0.1.0-to-candidate proof does not verify the
+v0.2.0-to-candidate path.

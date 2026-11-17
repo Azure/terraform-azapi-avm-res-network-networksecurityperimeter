@@ -63,9 +63,10 @@ module "network_security_perimeter" {
 
 ## Compatibility and operational limits
 
-This local candidate is a breaking refactor from v0.1.0, not a released or
-Azure-verified upgrade. Read [the upgrade guide](UPGRADE.md) before changing an
-existing deployment. Terraform >=1.11.0 and AzAPI >=2.12, <3.0 are required.
+This candidate is an unreleased breaking refactor. Read
+[the upgrade guide](UPGRADE.md) for version-specific state moves, bounded Azure
+verification and unverified paths before changing an existing deployment.
+Terraform >=1.11.0 and AzAPI >=2.12, <3.0 are required.
 
 Writable children remain independently consumable, single-instance submodules;
 the parent owns map cardinality. `parent_id` replaces scope-name inputs.
@@ -188,6 +189,14 @@ descendant teardown **including full module destroy**. Apply ReadOnly profile
 locks only after descendant creation. This staged contract also applies to
 standalone profiles whose descendants another configuration manages.
 Do not infer automatic locked teardown or propagation proof from mocked tests.
+## Upgrading existing deployments
+
+Released **v0.2.0 introduced breaking child addresses and output shapes** relative
+to v0.1.0; this candidate introduces further interface and ownership changes.
+Follow the [upgrade guide](UPGRADE.md) for your exact starting version.
+Do not replay already-completed moves. A version bump alone does not preserve
+state, and the bounded v0.1.0-to-candidate proof does not verify the
+v0.2.0-to-candidate path.
 
 <!-- markdownlint-disable MD033 -->
 ## Requirements
@@ -798,5 +807,9 @@ Version:
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection
 
-The software may collect information about you and your use of the software and send it to Microsoft. Microsoft may use this information to provide services and improve our products and services. You may turn off the telemetry as described in the repository. There are also some features in the software that may enable you and Microsoft to collect data from users of your applications. If you use these features, you must comply with applicable law, including providing appropriate notices to users of your applications together with a copy of Microsoft’s privacy statement. Our privacy statement is located at <https://go.microsoft.com/fwlink/?LinkID=824704>. You can learn more about data collection and use in the help documentation and our privacy statement. Your use of the software operates as your consent to these practices.
+The software may collect information about you and your use of the software and send it to Microsoft. Microsoft may use this information to provide services and improve our products and services. You may turn off the telemetry as described in the [repository](https://aka.ms/avm/telemetry). There are also some features in the software that may enable you and Microsoft to collect data from users of your applications. If you use these features, you must comply with applicable law, including providing appropriate notices to users of your applications together with a copy of Microsoft's privacy statement. Our privacy statement is located at <https://go.microsoft.com/fwlink/?LinkID=824704>. You can learn more about data collection and use in the help documentation and our privacy statement. Your use of the software operates as your consent to these practices.
+
+## Trademarks
+
+**Trademarks** This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general). Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.
 <!-- END_TF_DOCS -->
