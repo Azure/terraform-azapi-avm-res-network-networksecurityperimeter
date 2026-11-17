@@ -60,6 +60,10 @@ module "network_security_perimeter" {
 }
 ```
 
+## Upgrading from 0.1.0
+
+The planned **0.2.0 is a breaking release**: existing profiles, access rules, and resource associations change Terraform addresses, and root output shapes change. Follow the [upgrade guide](UPGRADE.md) to review and rehearse every existing resource-instance move before changing operational state or applying the upgrade. A version bump alone does not preserve state.
+
 <!-- markdownlint-disable MD033 -->
 ## Requirements
 
