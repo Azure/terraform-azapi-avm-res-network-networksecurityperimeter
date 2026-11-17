@@ -91,6 +91,51 @@ run "external_resource_reference" {
   }
 }
 
+run "retarget_body_and_known_extension_scopes" {
+  command = plan
+  variables {
+    private_link_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Storage/storageAccounts/targetb"
+    lock                     = { kind = "CanNotDelete", name = "association-lock" }
+    role_assignments = {
+      reader = {
+        name                       = "00000000-0000-0000-0000-000000000031"
+        principal_id               = "00000000-0000-0000-0000-000000000032"
+        role_definition_id_or_name = "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
+      }
+    }
+    private_link_resource_extensions = { lock_inheritance_enabled = false }
+  }
+  assert {
+    condition     = azapi_resource.this.body.properties.privateLinkResource.id == var.private_link_resource_id && azapi_resource.role_assignments["reader"].parent_id == "${var.parent_id}/resourceAssociations/${var.name}" && output.extension_resource_ids.lock == "${var.parent_id}/resourceAssociations/${var.name}/providers/Microsoft.Authorization/locks/association-lock"
+    error_message = "Retargeting must keep the association extension scope known at plan time without transferring target lifecycle ownership."
+  }
+  assert {
+    condition     = length(azapi_resource.target_lock) == 0 && length(azapi_resource.target_role_assignments) == 0 && azapi_resource.role_assignments["reader"].name == var.role_assignments.reader.name
+    error_message = "Opted-out external extensions must remain unowned, and the explicit association Reader GUID must be preserved."
+  }
+  providers = {
+    azapi  = azapi
+    random = random
+  }
+}
+
+run "mutable_profile_and_mode_body" {
+  command = apply
+  variables {
+    private_link_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Storage/storageAccounts/targetb"
+    profile_resource_id      = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp/profiles/other"
+    access_mode              = "Enforced"
+  }
+  assert {
+    condition     = azapi_resource.this.body.properties.profile.id == var.profile_resource_id && azapi_resource.this.body.properties.accessMode == "Enforced" && azapi_resource.this.body.properties.privateLinkResource.id == var.private_link_resource_id
+    error_message = "Mutable profile and access mode must map independently from the constant external target."
+  }
+  providers = {
+    azapi  = azapi
+    random = random
+  }
+}
+
 run "reject_bad_mode" {
   command = plan
   variables {

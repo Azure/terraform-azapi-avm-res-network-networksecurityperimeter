@@ -2,13 +2,19 @@
 
 ## Status and baseline
 
-This guide describes the intended identity-preserving path from released
+This guide describes the identity-preserving path from released
 v0.1.0 (`8c5aaaad4d8674b1e742dd0ad830fa80a66c757a`) to this local candidate.
-It is **not yet verified against an applied released Azure state**. Do not
-apply an upgrade based on mock tests alone. Existing main-sourced consumers
-must use the additional qualifications below.
+Bounded independent same-state verification covered adoption with the association
+target unchanged and no replacements, subsequent target replacement with owned
+locks/RBAC, in-place profile/access-mode changes and normal teardown. Telemetry
+was disabled. Evidence is exact-source-specific, not proof for every state or
+optional configuration; the unverified exceptions below remain unverified.
+Do not apply an upgrade based on mock tests alone. Existing main-sourced
+consumers must use the qualifications below.
 
-Freeze an exact candidate commit before Azure verification. Back up state in
+Freeze an exact candidate commit, or a protected immutable full-source snapshot
+and verified manifest when committing is not authorized, before Azure verification.
+Back up state in
 protected storage, retain the backend/workspace, and capture current resource
 IDs, child keys, assignment GUIDs, locks/notes and outputs. Keep the original
 AzureRM, random and modtm provider configurations available for the one-time
@@ -182,6 +188,39 @@ is not an unlock mechanism or Azure propagation proof.
 
 ## Required verification before use
 
+### Association immutable-target replacement
+
+Keep the existing `private_link_resource_id` unchanged during adoption.
+Subsequent target changes now require delete-before-create of the association:
+Azure rejects an in-place PUT to a different PaaS target. Its ARM ID can remain
+the same after replacement. Inspect saved-plan actions and replacement paths,
+not only IDs. No create-before-destroy or consumer unbind/state edits are needed.
+Profile/access-mode edits with a constant target remain in-place.
+
+Owned association-scope locks and Readers are replaced with the association,
+including an explicitly configured Reader GUID. Explicitly owned target
+extensions move from the old to the new target through their changed scope;
+unconfigured or externally owned extensions and both targets remain untouched.
+Before selective replacement, stage removal of any applicable ancestor lock
+as described above. An unchanged ancestor lock is not an automatic unlock.
+
+### Link/profile ordering
+
+Module-managed links now consume matching local profile resource names rather
+than only input strings. This orders profile creation before link creation and
+link deletion before local profile deletion, without depending on profile
+extensions or deferring link role-definition lookups. The input remains a list
+of names, not profile map keys; externally managed names and `*` pass through.
+No ARM identity, role assignment GUID or interface changes are intended.
+
+Remote profiles are owned outside this module's local profile collection.
+Consumers must wire the actual link owner to remote profile resource outputs
+(or an appropriately scoped explicit dependency), including destruction order.
+A GET-only `link_references` lookup does not own or delete the relationship and
+cannot substitute for that dependency. Standalone link submodule consumers must
+likewise supply dependencies on their profile owners. Existing staged ancestor
+lock-removal requirements still apply; this change does not unlock resources.
+
 1. Successfully apply the pinned released baseline in an approved isolated
    fixture, then inspect its refreshed plan and capture protected state/readbacks.
 2. Switch the **same state** to an immutable candidate, make only the changes
@@ -202,9 +241,10 @@ is not an unlock mechanism or Azure propagation proof.
    broad resource-group deletion is not an implicit fallback.
 
 Fresh E2E and independent released-state upgrade verification are separate gates.
-Neither is authorized or claimed by this local implementation. Examples are
-fresh-deployment configurations; their scaffold changes are not an automatic
-upgrade path for previously applied example state.
+The bounded verification above does not authorize changes to another deployment
+or establish release readiness without the remaining review and validation gates.
+Examples are fresh-deployment configurations; their scaffold changes are not an
+automatic upgrade path for previously applied example state.
 
 ## Rollback limitations
 

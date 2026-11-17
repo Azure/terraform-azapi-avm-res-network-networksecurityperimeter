@@ -72,6 +72,8 @@ resource "azapi_resource" "role_assignments" {
   }
 
   lifecycle {
+    replace_triggered_by = [azapi_resource.this.body.properties.privateLinkResource.id]
+
     precondition {
       condition     = strcontains(lower(local.extension_assignments.child[each.key].role_definition_id_or_name), local.role_definition_resource_substring)
       error_message = "The role definition was not found at the assignable scope; supply an assignable role name or resource ID."
@@ -144,6 +146,9 @@ resource "azapi_resource" "lock" {
     }
   }
 
+  lifecycle {
+    replace_triggered_by = [azapi_resource.this.body.properties.privateLinkResource.id]
+  }
   depends_on = [terraform_data.extension_ownership, azapi_resource.role_assignments]
 }
 

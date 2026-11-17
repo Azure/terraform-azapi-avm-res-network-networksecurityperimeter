@@ -3,6 +3,20 @@
 This submodule manages resource associations for a Network Security Perimeter (`Microsoft.Network/networkSecurityPerimeters/resourceAssociations`).
 
 Resource associations link Azure PaaS resources to the perimeter, with configurable access modes (`Learning`, `Enforced`, `Audit`).
+
+## Retargeting
+
+The PaaS target is immutable. Changing `private_link_resource_id` deletes the
+association before recreating it with the new target, even when its name and ARM
+ID stay the same. Association-scope locks and role assignments follow that
+replacement; explicit assignment GUIDs remain configured. Profile and access-mode
+changes do not require association replacement.
+
+Remove applicable ancestor locks in a separate approved apply before retargeting,
+verify removal, then apply the inspected replacement plan and restore locks
+separately. ReadOnly locks also block updates. An unchanged ancestor lock is not
+automatically removed. Target-scoped extensions move only when explicitly owned
+through `private_link_resource_extensions`; neither PaaS target is owned here.
 ## Extension ownership
 
 Canonical `lock` and `role_assignments` apply to the association scope.

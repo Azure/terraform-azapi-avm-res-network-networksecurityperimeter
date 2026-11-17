@@ -15,6 +15,7 @@ resource "azapi_resource" "this" {
     }
   }
   ignore_body_changes    = length(var.ignore_body_changes.network_network_security_perimeters_resource_associations) > 0 ? var.ignore_body_changes.network_network_security_perimeters_resource_associations : null
+  replace_triggers_refs  = ["properties.privateLinkResource.id"]
   response_export_values = []
   retry                  = var.retry
 

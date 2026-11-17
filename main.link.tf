@@ -8,10 +8,14 @@ module "nsp_link" {
   description                                = each.value.description
   enable_telemetry                           = var.enable_telemetry
   ignore_body_changes                        = var.ignore_body_changes.network_network_security_perimeters_links
-  local_inbound_profiles                     = each.value.local_inbound_profiles
-  location                                   = var.location
-  lock                                       = each.value.lock
-  remote_inbound_profiles                    = each.value.remote_inbound_profiles
+  # Depend on profile resources, not their locks/RBAC or the entire module.
+  local_inbound_profiles = [
+    for name in each.value.local_inbound_profiles :
+    lookup({ for key, profile in var.profiles : profile.name => module.nsp_profile[key].name }, name, name)
+  ]
+  location                = var.location
+  lock                    = each.value.lock
+  remote_inbound_profiles = each.value.remote_inbound_profiles
   remote_perimeter_extensions = merge(each.value.remote_perimeter_extensions, {
     lock                     = each.value.remote_perimeter_extensions.lock != null ? each.value.remote_perimeter_extensions.lock : var.lock
     lock_inheritance_enabled = each.value.remote_perimeter_extensions.lock_inheritance_enabled && (each.value.remote_perimeter_extensions.lock != null || var.lock != null)

@@ -21,7 +21,7 @@ variable "parent_id" {
 
 variable "private_link_resource_id" {
   type        = string
-  description = "The fully-qualified ARM resource ID of the PaaS resource to associate (must support Private Link). Polymorphic resource types are deliberately not restricted to one parse_resource_id type under TFNFR38."
+  description = "The fully-qualified ARM resource ID of the PaaS resource to associate (must support Private Link). Changing this immutable target deletes and recreates the association and its owned association-scope extensions, not the PaaS resource. Polymorphic resource types are deliberately not restricted to one parse_resource_id type under TFNFR38."
 }
 
 variable "profile_resource_id" {
