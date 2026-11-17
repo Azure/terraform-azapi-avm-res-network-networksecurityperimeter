@@ -25,11 +25,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.21"
     }
-    # tflint-ignore: terraform_unused_required_providers
-    modtm = {
-      source  = "registry.terraform.io/azure/modtm"
-      version = "~> 0.3"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.5"
@@ -69,7 +64,7 @@ data "azurerm_client_config" "this" {}
 # Resource group for all resources
 module "resourcegroup" {
   source  = "Azure/avm-res-resources-resourcegroup/azurerm"
-  version = "0.2.2"
+  version = "0.5.0"
 
   location         = module.regions.regions[random_integer.region_index.result].name
   name             = module.naming.resource_group.name_unique
@@ -79,13 +74,13 @@ module "resourcegroup" {
 # Key Vault to be protected by the NSP
 module "keyvault" {
   source  = "Azure/avm-res-keyvault-vault/azurerm"
-  version = "0.10.2"
+  version = "0.13.1"
 
-  location            = module.resourcegroup.resource.location
-  name                = module.naming.key_vault.name_unique
-  resource_group_name = module.resourcegroup.resource.name
-  tenant_id           = data.azurerm_client_config.this.tenant_id
-  enable_telemetry    = var.enable_telemetry
+  location         = module.resourcegroup.resource.location
+  name             = module.naming.key_vault.name_unique
+  parent_id        = module.resourcegroup.resource_id
+  tenant_id        = data.azurerm_client_config.this.tenant_id
+  enable_telemetry = var.enable_telemetry
   tags = {
     environment = "example"
   }
@@ -150,8 +145,6 @@ The following requirements are needed by this module:
 
 - <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.21)
 
-- <a name="requirement_modtm"></a> [modtm](#requirement\_modtm) (~> 0.3)
-
 - <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.5)
 
 ## Resources
@@ -200,7 +193,7 @@ The following Modules are called:
 
 Source: Azure/avm-res-keyvault-vault/azurerm
 
-Version: 0.10.2
+Version: 0.13.1
 
 ### <a name="module_naming"></a> [naming](#module\_naming)
 
@@ -224,7 +217,7 @@ Version: 0.13.0
 
 Source: Azure/avm-res-resources-resourcegroup/azurerm
 
-Version: 0.2.2
+Version: 0.5.0
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection
