@@ -110,6 +110,10 @@ run "remote_identity_and_lists" {
     condition     = azapi_resource.this.body.properties.description == var.description
     error_message = "An explicitly supplied link description must be preserved."
   }
+  assert {
+    condition     = azapi_resource.this.replace_triggers_external_values.auto_approved_remote_perimeter_resource_id == var.auto_approved_remote_perimeter_resource_id
+    error_message = "Immutable remote identity must also drive replacement independently of fully known body properties."
+  }
   providers = {
     azapi  = azapi
     random = random
@@ -121,6 +125,10 @@ run "null_and_empty_defaults" {
   assert {
     condition     = !contains(keys(azapi_resource.this.body.properties), "description")
     error_message = "A null link description must be omitted from the request body, not serialized as null."
+  }
+  assert {
+    condition     = azapi_resource.this.replace_triggers_external_values.auto_approved_remote_perimeter_resource_id == null
+    error_message = "Manual-link null identity must remain wrapped so later remote identity changes are tracked."
   }
   assert {
     condition     = azapi_resource.this.body.properties.autoApprovedRemotePerimeterResourceId == null && length(azapi_resource.this.body.properties.localInboundProfiles) == 0 && length(azapi_resource.this.body.properties.remoteInboundProfiles) == 0

@@ -10,7 +10,11 @@ resource "azapi_resource" "this" {
       remoteInboundProfiles                 = var.remote_inbound_profiles
     }, var.description == null ? {} : { description = var.description })
   }
-  ignore_body_changes    = length(var.ignore_body_changes.network_network_security_perimeters_links) > 0 ? var.ignore_body_changes.network_network_security_perimeters_links : null
+  ignore_body_changes = length(var.ignore_body_changes.network_network_security_perimeters_links) > 0 ? var.ignore_body_changes.network_network_security_perimeters_links : null
+  # Body-path replacement checks are skipped while the body contains unknown values.
+  replace_triggers_external_values = {
+    auto_approved_remote_perimeter_resource_id = var.auto_approved_remote_perimeter_resource_id
+  }
   replace_triggers_refs  = ["properties.autoApprovedRemotePerimeterResourceId"]
   response_export_values = []
   retry                  = var.retry
