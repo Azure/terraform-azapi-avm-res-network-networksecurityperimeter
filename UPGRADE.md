@@ -3,7 +3,7 @@
 ## Status and baseline
 
 This guide describes the identity-preserving path from released
-v0.1.0 (`8c5aaaad4d8674b1e742dd0ad830fa80a66c757a`) to this local candidate.
+v0.1.0 (`8c5aaaad4d8674b1e742dd0ad830fa80a66c757a`) to an earlier AzAPI candidate.
 Bounded independent same-state verification covered adoption with the association
 target unchanged and no replacements, subsequent target replacement with owned
 locks/RBAC, in-place profile/access-mode changes and normal teardown. Telemetry
@@ -17,9 +17,35 @@ contains the keyed child extraction. The v0.2.0-to-`9c7e545` path was verified
 in Azure in the protected r24 evidence, including default-enabled telemetry,
 retained identities and normal cleanup. That evidence remains attributed to
 `9c7e545`, with its fixture-only known-ID and service-description recoveries.
-**The subsequent review changes to assignment UUID generation, role-name lookup,
-retry defaults and link-lock replacement have not been verified in Azure.**
-The earlier result is not an exact-source pass for this working candidate.
+Subsequent Azure verification is scoped to these exact candidates:
+
+- **`c5f8c679`**: actual v0.2.0 same-state upgrade preserved existing generated
+  assignment GUIDs and resource identities. A subsequent principal mutation,
+  with staged unlock/relock, generated a new assignment GUID; normal teardown
+  passed. That fixture contained no links or link references.
+- **`1fba7dda`**: fresh single-apply unknown remote-ID/new-principal composition,
+  principal/role GUID mutations, and RG-only custom-role NAME lookup passed.
+  Its unknown-new-target link-retarget plan incorrectly proposed an update and
+  was rejected before writes; first normal teardown passed.
+- **`0f34f118`**: fresh single-apply composition and actual null-description
+  omission passed. Retargeting to a newly planned, unknown perimeter correctly
+  replaced the same-ID link and its own lock, rotated the target-scope assignment
+  GUID, preserved unrelated identities, and completed first normal teardown.
+
+These review runs used Terraform 1.17.2, AzAPI 2.14.0, random 3.9.1 and interfaces
+0.10.0. Paired refreshed convergence plans contained no infrastructure changes,
+but default-enabled telemetry produces narrowly classified timestamp updates;
+they were not strict whole-plan no-ops. Retry defaults were configured correctly;
+retry recovery/timing was not exercised because actual writes succeeded.
+
+Only link runtime and link tests changed from `c5f8c679` through `1fba7dda` to
+`0f34f118`; retained nonlink upgrade and role-mutation evidence keeps its
+original execution SHA. This does not establish a released link/reference
+upgrade, first-time native-trigger adoption combined with retargeting,
+manual-null target live lifecycle, new-unknown-remote reference topology, or
+replacement under unchanged ancestor locks. No automatic ancestor unlock or
+blanket upgrade safety is claimed.
+
 Do not replay child moves when state already has the
 destination addresses. Review the candidate's parent-ID, output, root provider
 conversion, link-reference and extension-ownership changes against that actual
