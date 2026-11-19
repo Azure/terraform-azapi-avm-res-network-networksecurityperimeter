@@ -94,10 +94,13 @@ run "nested_reference" {
 run "association" {
   command = plan
   module {
-    source = "./tests/fixtures/association_composition"
+    source = "./tests/fixtures/composition"
+  }
+  variables {
+    mode = "association"
   }
   assert {
-    condition     = keys(module.association.extension_resource_ids.role_assignments) == ["lookup", "reader"]
+    condition     = keys(module.association["target"].extension_resource_ids.role_assignments) == ["lookup", "reader"]
     error_message = "Association assignment addresses must retain configured keys with unknown principal and target IDs."
   }
 }

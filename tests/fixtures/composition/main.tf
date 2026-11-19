@@ -4,6 +4,28 @@ resource "terraform_data" "principal" {
   input = each.key
 }
 
+resource "terraform_data" "target" {
+  count = var.mode == "association" ? 1 : 0
+
+  input = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Storage/storageAccounts/test"
+}
+
+module "association" {
+  source   = "../../../modules/resource_association"
+  for_each = var.mode == "association" ? { target = true } : {}
+
+  name                     = "association"
+  parent_id                = "${local.parent_id}/providers/Microsoft.Network/networkSecurityPerimeters/local"
+  private_link_resource_id = terraform_data.target[0].output
+  profile_resource_id      = "${local.parent_id}/providers/Microsoft.Network/networkSecurityPerimeters/local/profiles/main"
+  enable_telemetry         = false
+  location                 = "eastus2"
+  private_link_resource_extensions = {
+    role_assignments = local.association_assignments
+  }
+  role_assignments = local.association_assignments
+}
+
 # No ID override: the mocked resource ID is genuinely unknown during PLAN.
 module "remote" {
   source   = "../../.."
