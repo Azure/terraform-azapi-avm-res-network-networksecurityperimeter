@@ -17,7 +17,7 @@ locals {
     startswith(lower(target.scope), "/subscriptions/") ? join("/", slice(split("/", target.scope), 0, 3)) : target.scope
   }
   role_lookup_scopes = {
-    for key, target in local.extension_scopes : key => local.role_definition_scopes[key]
+    for key, target in local.extension_scopes : key => target.scope
     if anytrue([for assignment in target.assignments : !strcontains(lower(assignment.role_definition_id_or_name), local.role_definition_resource_substring)])
   }
   role_definition_ids_by_name = {

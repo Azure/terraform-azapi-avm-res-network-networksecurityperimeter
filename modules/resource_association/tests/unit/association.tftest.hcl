@@ -239,8 +239,12 @@ run "normalized_target_direct_controls_and_body" {
     error_message = "Direct declarations must preserve canonical bodies, per-target lock override and explicit assignment GUID."
   }
   assert {
-    condition     = azapi_resource.target_role_assignments["reader"].body.properties.roleDefinitionId == data.azapi_resource_list.role_definitions["target"].output.results[0].id && data.azapi_resource_list.role_definitions["target"].parent_id == "/subscriptions/00000000-0000-0000-0000-000000000000" && azapi_resource.target_role_assignments["reader"].replace_triggers_external_values.principal_id == var.private_link_resource_extensions.role_assignments.reader.principal_id && azapi_resource.target_role_assignments["reader"].replace_triggers_external_values.description == "Explicit target permission"
+    condition     = azapi_resource.target_role_assignments["reader"].body.properties.roleDefinitionId == data.azapi_resource_list.role_definitions["target"].output.results[0].id && data.azapi_resource_list.role_definitions["target"].parent_id == trimsuffix(var.private_link_resource_id, "/") && azapi_resource.target_role_assignments["reader"].replace_triggers_external_values.principal_id == var.private_link_resource_extensions.role_assignments.reader.principal_id && azapi_resource.target_role_assignments["reader"].replace_triggers_external_values.description == "Explicit target permission"
     error_message = "Stable case-insensitive role lookup and immutable assignment triggers must survive wrapper removal."
+  }
+  assert {
+    condition     = random_uuid.target_role_assignment_name["reader"].keepers.scope == lower(trimsuffix(var.private_link_resource_id, "/")) && random_uuid.target_role_assignment_name["reader"].keepers.principal_id == var.private_link_resource_extensions.role_assignments.reader.principal_id && random_uuid.target_role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.target_role_assignments["reader"].body.properties.roleDefinitionId) && random_uuid.role_assignment_name["child"].keepers.scope == lower("${var.parent_id}/resourceAssociations/${var.name}")
+    error_message = "Association child and target UUID keepers must use their separate assignment scopes, including target retargeting."
   }
   assert {
     condition = alltrue([

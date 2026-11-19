@@ -1,4 +1,34 @@
+run "null_target_with_reference_lock_only" {
+  command = plan
+  variables {
+    lock                        = { kind = "CanNotDelete" }
+    remote_perimeter_extensions = { lock_inheritance_enabled = false }
+  }
+  assert {
+    condition     = length(azapi_resource.lock) == 1 && length(azapi_resource.target_lock) == 0 && length(azapi_resource.target_role_assignments) == 0 && length(data.azapi_resource_list.role_definitions) == 0
+    error_message = "A reference-only lock must not require a remote ID or create remote extensions."
+  }
+}
+
+run "reject_self_target" {
+  command = plan
+  variables {
+    remote_perimeter_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp"
+  }
+  expect_failures = [terraform_data.remote_scope]
+}
+
 mock_provider "azapi" {
+  mock_data "azapi_resource_list" {
+    defaults = {
+      output = {
+        results = [{
+          id        = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
+          role_name = "RG Custom Reader"
+        }]
+      }
+    }
+  }
   mock_data "azapi_resource" {
     defaults = {
       id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp/linkReferences/reference"
@@ -93,7 +123,7 @@ run "lookup_with_extensions" {
       reader = {
         name                       = "00000000-0000-0000-0000-000000000010"
         principal_id               = "00000000-0000-0000-0000-000000000011"
-        role_definition_id_or_name = "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
+        role_definition_id_or_name = "rg custom reader"
       }
     }
   }
@@ -104,6 +134,10 @@ run "lookup_with_extensions" {
   assert {
     condition     = azapi_resource.lock[0].type == "Microsoft.Authorization/locks@2020-05-01" && azapi_resource.target_lock[0].type == azapi_resource.lock[0].type && azapi_resource.role_assignments["reader"].type == "Microsoft.Authorization/roleAssignments@2022-04-01" && azapi_resource.target_lock[0].retry.interval_seconds == 5 && azapi_resource.role_assignments["reader"].timeouts.delete == "9m"
     error_message = "The GET-only owner must itself provide tested extension API defaults and cascade resource controls to distinct extension nodes."
+  }
+  assert {
+    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == "${var.parent_id}/linkReferences/${var.name}" && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/linkReferences/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId)
+    error_message = "GET-only reference ownership must still resolve custom roles at the assignment scope and rotate generated UUIDs by identity."
   }
   providers = {
     azapi  = azapi

@@ -22,12 +22,12 @@ variable "resource_types" {
 
 variable "retry" {
   type = object({
-    error_message_regex  = optional(list(string))
-    interval_seconds     = optional(number)
-    max_interval_seconds = optional(number)
+    error_message_regex  = optional(list(string), ["ScopeLocked", "PrincipalNotFound", "LinkedAuthorizationFailed"])
+    interval_seconds     = optional(number, 15)
+    max_interval_seconds = optional(number, 60)
   })
-  default     = null
-  description = "Extension retry controls: error_message_regex, interval_seconds, max_interval_seconds. The GET-only reference data source does not support this resource argument."
+  default     = {}
+  description = "Extension retry controls: error_message_regex defaults to ScopeLocked, PrincipalNotFound and LinkedAuthorizationFailed; interval_seconds and max_interval_seconds default to 15 and 60. Patterns can be replaced, or set retry to null for provider defaults. Retries do not grant missing permissions. The GET-only reference data source does not support this resource argument."
 }
 
 variable "timeouts" {

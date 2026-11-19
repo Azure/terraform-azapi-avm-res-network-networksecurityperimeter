@@ -13,6 +13,11 @@ Standalone calls inherit the link lock; root calls inherit the primary perimeter
 lock. Remote RBAC is never automatic.
 
 The remote perimeter's configuration, tags and lifecycle remain external.
+The remote ID may come directly from another module's `resource_id` and remain
+unknown during planning. Keep extension presence, assignment keys and role
+selectors plan-known; the ID is only a scope value. Terraform retains the
+dependency on the remote perimeter and can create it before the link in one
+apply, without a separate remote deployment or targeted apply.
 Manual links without a remote ARM ID cannot manage remote extensions and must
 disable remote lock inheritance when an inherited lock would otherwise apply.
 Existing extensions require opt-out or deliberate adoption. Remove applicable

@@ -1,8 +1,8 @@
 data "azapi_resource_list" "extension_role_definitions" {
   for_each = local.extension_role_lookup_scopes
 
-  # The existing subscription is stable even before a managed child exists.
-  parent_id = startswith(each.value, "/subscriptions/") ? join("/", slice(split("/", each.value), 0, 3)) : each.value
+  # Lookup at the assignment scope so RG-scoped custom roles remain visible.
+  parent_id = each.value
   type      = var.resource_types.authorization_role_definitions
   response_export_values = {
     results = "value[].{id: id, role_name: properties.roleName}"
@@ -27,7 +27,7 @@ resource "terraform_data" "extension_ownership" {
     }
     precondition {
       condition     = alltrue([for target in local.extension_scopes : target.scope != "unavailable" || (target.lock == null && length(target.assignments) == 0)])
-      error_message = "Remote extension management requires a known ARM remote perimeter ID. Otherwise disable that target's lock inheritance and leave RBAC empty."
+      error_message = "Remote extension management requires a non-null ARM remote perimeter ID. Otherwise disable that target's lock inheritance and leave RBAC empty."
     }
   }
 }

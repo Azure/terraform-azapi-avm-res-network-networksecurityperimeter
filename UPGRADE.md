@@ -13,8 +13,14 @@ Do not apply an upgrade based on mock tests alone. Existing v0.2.0 and
 main-sourced consumers must use the qualifications below.
 
 Released v0.2.0 (`b1933fb2b8c857d97a2e642873a768256203f48c`) already
-contains the keyed child extraction. **The v0.2.0-to-candidate path has not
-been verified in Azure.** Do not replay child moves when state already has the
+contains the keyed child extraction. The v0.2.0-to-`9c7e545` path was verified
+in Azure in the protected r24 evidence, including default-enabled telemetry,
+retained identities and normal cleanup. That evidence remains attributed to
+`9c7e545`, with its fixture-only known-ID and service-description recoveries.
+**The subsequent review changes to assignment UUID generation, role-name lookup,
+retry defaults and link-lock replacement have not been verified in Azure.**
+The earlier result is not an exact-source pass for this working candidate.
+Do not replay child moves when state already has the
 destination addresses. Review the candidate's parent-ID, output, root provider
 conversion, link-reference and extension-ownership changes against that actual
 state, then independently verify the same-state upgrade before applying it to
@@ -71,10 +77,28 @@ Do not issue per-key state commands for these standard paths. AzAPI v2.12.0's
 `azapi_resource` MoveState converter accepts AzureRM sources and initializes
 ARM ID, name, parent and type from source state. The original lock name/notes
 defaults are preserved. RBAC uses a narrow name ignore to preserve the adopted
-AzureRM-generated GUID rather than replacing it with the utility's fresh UUID.
+AzureRM-generated GUID rather than replacing it with a fresh UUID.
 Input-based replacement triggers retain immutable-input behavior; their first
 adoption and subsequent changes still require real plan verification.
 Lock level and notes changes also retain the released replacement behavior.
+
+Generated role-assignment names now use module-owned UUIDs keyed by normalized
+scope, principal and resolved role ID. The new UUID bindings are state-only
+additions; existing utility UUID bindings remain in place. The assignment's
+name ignore preserves an existing GUID on an unchanged upgrade, while an
+intentional principal/role/scope replacement uses a newly generated UUID.
+This applies to primary, child and target assignments. For explicit `name`
+values, the caller must choose a new GUID when changing principal, role or scope.
+Stage ancestor unlock/change/relock as documented below; UUID rotation does not
+unlock an unchanged lock. Link-owned locks now follow remote-target replacement
+of the link at its unchanged ARM ID.
+
+Role-name lookup uses each assignment's applicable scope (the existing RG for
+primary assignments), independently of subscription qualification of tenant-level
+role IDs. Defaults now retry `ScopeLocked`, `PrincipalNotFound` and
+`LinkedAuthorizationFailed`; custom `retry.error_message_regex` replaces these
+patterns and `retry = null` restores provider defaults. These are bounded
+replication retries, not permission grants or automatic unlocking.
 
 Composite AzureRM role-assignment state IDs containing `|tenant` are a distinct
 **unverified exception**, not proven by tenant-level role-definition prefix
@@ -183,8 +207,17 @@ additional per-item precedence. Retry/timeouts continue to cascade unchanged.
 
 Each collection item supports its own `lock`/`role_assignments`. A lookup-only
 reference can own extension resources without owning the reference. If remote
-extensions are requested for a reference, supply its known
-`remote_perimeter_resource_id`, matching the GET response. Manual links without
+extensions are requested for a reference, supply its non-null
+`remote_perimeter_resource_id`, matching the GET response. Remote IDs may remain
+unknown at plan time when passed from another module's `resource_id`; keep
+extension presence, assignment keys and role selectors plan-known. Terraform
+preserves creation ordering and can create the remote perimeter and initiating
+link in one apply, without separately deploying the remote first. GET-only
+references still need a dependency on their producing link when it is also new.
+The `child`/`target` keys and managed extension addresses are unchanged; no new
+state move or import is required by this composition correction. Its unknown-ID
+coverage is provider-mocked plan regression evidence, not live Azure proof.
+Manual links without
 a remote ARM ID require remote lock opt-out and empty remote RBAC.
 
 Before selective replacement, ReadOnly-protected updates, or descendant

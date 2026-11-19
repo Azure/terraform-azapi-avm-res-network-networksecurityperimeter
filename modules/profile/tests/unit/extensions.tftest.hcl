@@ -53,6 +53,10 @@ run "explicit_scope_body_identity_controls" {
     error_message = "Canonical role input must map to the verified ARM body and case-insensitive role lookup."
   }
   assert {
+    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == "${var.parent_id}/profiles/${var.name}" && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/profiles/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId)
+    error_message = "Lookup must use the profile scope while UUID keepers track the independently normalized role ID and scope."
+  }
+  assert {
     condition     = azapi_resource.lock[0].name == "lock-CanNotDelete" && azapi_resource.lock[0].body.properties.level == "CanNotDelete" && azapi_resource.lock[0].retry.interval_seconds == 3 && azapi_resource.role_assignments["reader"].timeouts.delete == "8m" && azapi_resource.lock[0].type == var.resource_types.authorization_locks
     error_message = "Lock defaults/API and shared retry/timeouts must be effective."
   }

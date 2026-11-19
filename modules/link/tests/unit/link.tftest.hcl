@@ -1,4 +1,34 @@
+run "null_target_with_child_lock_only" {
+  command = plan
+  variables {
+    lock                        = { kind = "CanNotDelete" }
+    remote_perimeter_extensions = { lock_inheritance_enabled = false }
+  }
+  assert {
+    condition     = length(azapi_resource.lock) == 1 && length(azapi_resource.target_lock) == 0 && length(azapi_resource.target_role_assignments) == 0 && length(data.azapi_resource_list.role_definitions) == 0
+    error_message = "A child-only lock must not require a remote ID or create remote extensions."
+  }
+}
+
+run "reject_self_target" {
+  command = plan
+  variables {
+    auto_approved_remote_perimeter_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp"
+  }
+  expect_failures = [terraform_data.remote_scope]
+}
+
 mock_provider "azapi" {
+  mock_data "azapi_resource_list" {
+    defaults = {
+      output = {
+        results = [{
+          id        = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
+          role_name = "RG Custom Reader"
+        }]
+      }
+    }
+  }
   mock_data "azapi_client_config" {
     defaults = {
       subscription_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000"
@@ -105,7 +135,7 @@ run "standalone_link_remote_extensions" {
         reader = {
           name                       = "00000000-0000-0000-0000-000000000010"
           principal_id               = "00000000-0000-0000-0000-000000000011"
-          role_definition_id_or_name = "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
+          role_definition_id_or_name = "rg custom reader"
         }
       }
     }
@@ -113,6 +143,10 @@ run "standalone_link_remote_extensions" {
   assert {
     condition     = output.extension_resource_ids.remote_perimeter.lock == "${var.auto_approved_remote_perimeter_resource_id}/providers/Microsoft.Authorization/locks/remote-override" && length(output.extension_resource_ids.remote_perimeter.role_assignments) == 1 && output.extension_resource_ids.lock != null
     error_message = "The standalone link must own its extensions and honor remote overrides without owning the remote perimeter."
+  }
+  assert {
+    condition     = data.azapi_resource_list.role_definitions["target"].parent_id == var.auto_approved_remote_perimeter_resource_id && random_uuid.target_role_assignment_name["reader"].keepers.scope == lower(var.auto_approved_remote_perimeter_resource_id) && random_uuid.target_role_assignment_name["reader"].keepers.principal_id == var.remote_perimeter_extensions.role_assignments.reader.principal_id && random_uuid.target_role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.target_role_assignments["reader"].body.properties.roleDefinitionId) && contains(azapi_resource.target_role_assignments["reader"].retry.error_message_regex, "PrincipalNotFound")
+    error_message = "Remote lookup must retain target-scoped custom roles; UUIDs must track target identity and RBAC defaults must apply."
   }
   providers = {
     azapi  = azapi

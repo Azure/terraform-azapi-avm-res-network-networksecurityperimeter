@@ -23,12 +23,12 @@ variable "resource_types" {
 
 variable "retry" {
   type = object({
-    error_message_regex  = optional(list(string))
-    interval_seconds     = optional(number)
-    max_interval_seconds = optional(number)
+    error_message_regex  = optional(list(string), ["ScopeLocked", "PrincipalNotFound", "LinkedAuthorizationFailed"])
+    interval_seconds     = optional(number, 15)
+    max_interval_seconds = optional(number, 60)
   })
-  default     = null
-  description = "Retry settings: `error_message_regex` selects retryable errors; `interval_seconds` and `max_interval_seconds` control initial and maximum delay."
+  default     = {}
+  description = "Retry settings: `error_message_regex` defaults to ScopeLocked, PrincipalNotFound and LinkedAuthorizationFailed for lock propagation and RBAC replication; `interval_seconds` and `max_interval_seconds` default to 15 and 60. Patterns can be replaced, or set retry to null for provider defaults. Retries do not grant missing permissions."
 }
 
 variable "timeouts" {

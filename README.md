@@ -79,12 +79,21 @@ Per-resource `resource_types` and `ignore_body_changes` plus shared `retry` and
 notation; ignored configuration is not sent to Azure, and changes take effect
 only after apply. Do not ignore owned collections to conceal drift.
 
-Role names resolve case-insensitively at the existing resource-group scope.
+Role names resolve case-insensitively at the assignment's applicable scope
+(the existing resource group for the primary perimeter); role-ID subscription
+qualification is separate from lookup scope.
 With AzAPI there is no Microsoft Graph pre-check: setting
 `skip_service_principal_aad_check = true` supplies `principalType = ServicePrincipal`
 when no explicit principal type was given. Adopted assignment GUIDs are retained.
-Change immutable assignment inputs using a new map key; a changed explicit
-`name` also triggers replacement.
+Generated assignment UUIDs rotate when the principal, resolved role or scope
+changes, including target RBAC during association retargeting. Existing assignment
+names are retained on unchanged upgrades; additional UUID resources are state-only.
+A changed explicit `name` also triggers replacement. If you supply an explicit
+GUID, supply a new GUID when changing principal, role or scope.
+Default retry patterns include `PrincipalNotFound` and `LinkedAuthorizationFailed`
+for RBAC replication, as well as `ScopeLocked`; retries do not grant permissions.
+Override `retry.error_message_regex` to replace the patterns or set `retry = null`
+for provider defaults.
 
 Locks are ordered after writable children and assignments. Default retries cover
 `ScopeLocked` propagation errors; they do not unlock an unchanged lock.
@@ -116,6 +125,16 @@ targets. Link references use `remote_perimeter_resource_id` together with
 `remote_perimeter_extensions`; the supplied ID is checked against the reference's
 GET response before remote writes. The reference itself remains lookup-only,
 even if this module manages extensions at its scope.
+
+Remote perimeter IDs can be passed directly from another module's `resource_id`
+while unknown at plan time. Keep collection/assignment keys, extension presence
+and role selectors plan-known. Terraform retains the real resource dependency:
+the remote perimeter and the initiating link can be created in a single apply;
+no separate remote deployment, precomputed ID or targeted apply is required.
+Scope/ownership validations that need those IDs run once they resolve, before
+extension writes. GET-only references still require their service-created object
+to exist; when composing its producing link in the same apply, carry that link's
+output dependency through the relevant reference input.
 
 For each target, `lock_inheritance_enabled` defaults to `true`. An explicit
 target `lock` replaces the perimeter lock configuration; a null/omitted target
@@ -207,6 +226,8 @@ The following requirements are needed by this module:
 
 - <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
 
+- <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.6)
+
 ## Resources
 
 The following resources are used by this module:
@@ -215,6 +236,7 @@ The following resources are used by this module:
 - [azapi_resource.role_assignments](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.this](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [random_uuid.role_assignment_name](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/uuid) (resource)
 - [terraform_data.extension_ownership](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [terraform_data.telemetry](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [azapi_client_config.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
@@ -646,7 +668,7 @@ Default: `{}`
 
 ### <a name="input_retry"></a> [retry](#input\_retry)
 
-Description: Retry configuration for supported AzAPI resources and child modules. The default retries ScopeLocked errors during lock-removal propagation, not update-time unlocking. Set null to use provider defaults.
+Description: Retry configuration for supported AzAPI resources and child modules. Defaults retry ScopeLocked during lock-removal propagation and RBAC PrincipalNotFound/LinkedAuthorizationFailed replication errors. This does not unlock resources during updates or grant missing permissions. Override error\_message\_regex to replace these patterns, or set null to use provider defaults.
 
 - `error_message_regex` - Retryable error patterns.
 - `interval_seconds` - Initial retry interval in seconds.
@@ -656,7 +678,7 @@ Type:
 
 ```hcl
 object({
-    error_message_regex  = optional(list(string), ["ScopeLocked"])
+    error_message_regex  = optional(list(string), ["ScopeLocked", "PrincipalNotFound", "LinkedAuthorizationFailed"])
     interval_seconds     = optional(number, 15)
     max_interval_seconds = optional(number, 60)
   })

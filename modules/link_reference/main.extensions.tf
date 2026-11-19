@@ -38,10 +38,30 @@ resource "terraform_data" "extension_ownership" {
   }
 }
 
+resource "random_uuid" "role_assignment_name" {
+  for_each = var.role_assignments
+
+  keepers = {
+    scope        = lower(local.extension_scopes.child.scope)
+    principal_id = lower(each.value.principal_id)
+    role_id      = lower(local.extension_assignments.child[each.key].role_definition_id_or_name)
+  }
+}
+
+resource "random_uuid" "target_role_assignment_name" {
+  for_each = try(local.extension_scopes.target.assignments, {})
+
+  keepers = {
+    scope        = lower(local.extension_scopes.target.scope)
+    principal_id = lower(each.value.principal_id)
+    role_id      = lower(local.extension_assignments.target[each.key].role_definition_id_or_name)
+  }
+}
+
 resource "azapi_resource" "role_assignments" {
   for_each = var.role_assignments
 
-  name                 = module.avm["child"].role_assignments_azapi[each.key].name
+  name                 = coalesce(each.value.name, random_uuid.role_assignment_name[each.key].result)
   parent_id            = local.extension_scopes.child.scope
   type                 = var.resource_types.authorization_role_assignments
   body                 = module.avm["child"].role_assignments_azapi[each.key].body
@@ -72,6 +92,9 @@ resource "azapi_resource" "role_assignments" {
   }
 
   lifecycle {
+    # Keep an adopted GUID until an intentional immutable-input replacement.
+    ignore_changes = [name]
+
     precondition {
       condition     = strcontains(lower(local.extension_assignments.child[each.key].role_definition_id_or_name), local.role_definition_resource_substring)
       error_message = "The role definition was not found at the assignable scope; supply an assignable role name or resource ID."
@@ -83,7 +106,7 @@ resource "azapi_resource" "role_assignments" {
 resource "azapi_resource" "target_role_assignments" {
   for_each = try(local.extension_scopes.target.assignments, {})
 
-  name                 = module.avm["target"].role_assignments_azapi[each.key].name
+  name                 = coalesce(each.value.name, random_uuid.target_role_assignment_name[each.key].result)
   parent_id            = local.extension_scopes.target.scope
   type                 = var.resource_types.authorization_role_assignments
   body                 = module.avm["target"].role_assignments_azapi[each.key].body
@@ -114,6 +137,9 @@ resource "azapi_resource" "target_role_assignments" {
   }
 
   lifecycle {
+    # Keep an adopted GUID until an intentional immutable-input replacement.
+    ignore_changes = [name]
+
     precondition {
       condition     = strcontains(lower(local.extension_assignments.target[each.key].role_definition_id_or_name), local.role_definition_resource_substring)
       error_message = "The role definition was not found at the assignable scope; supply an assignable role name or resource ID."
@@ -176,7 +202,7 @@ resource "terraform_data" "remote_scope" {
   lifecycle {
     precondition {
       condition     = var.remote_perimeter_resource_id != null || (local.remote_perimeter_lock == null && length(var.remote_perimeter_extensions.role_assignments) == 0)
-      error_message = "Remote extensions require a known remote_perimeter_resource_id; otherwise explicitly disable remote lock inheritance and leave remote RBAC empty."
+      error_message = "Remote extensions require a non-null remote_perimeter_resource_id; otherwise explicitly disable remote lock inheritance and leave remote RBAC empty."
     }
     precondition {
       condition     = var.remote_perimeter_resource_id == null ? true : lower(var.remote_perimeter_resource_id) == lower(try(data.azapi_resource.this.output.properties.remotePerimeterResourceId, ""))

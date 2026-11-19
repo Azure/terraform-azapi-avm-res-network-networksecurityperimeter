@@ -22,11 +22,17 @@ the interfaces utility supplies canonical configuration, not lifecycle ownership
 `lock_inheritance_enabled = false` disables the remote lock even with an
 override. Remote RBAC defaults empty.
 
-Remote extension management requires a known `remote_perimeter_resource_id`.
+Remote extension management requires a non-null `remote_perimeter_resource_id`;
+it may come from another module and remain unknown during planning. Extension
+presence, assignment keys and role selectors must be plan-known. Terraform
+retains the remote scope dependency without requiring a separate deployment.
 Its identity must match `properties.remotePerimeterResourceId` returned by GET.
 No remote ID is inferred from an update-sensitive output. Without remote
 extensions, omit that ID and explicitly disable inheritance when applying a
 reference lock. The reference remains GET-only and is never deleted on teardown.
+If the link that produces the reference is created in the same apply, pass
+its output through the relevant reference input so the GET waits for that link;
+an unknown remote perimeter ID alone does not establish that service dependency.
 
 Direct `authorization_locks` and `authorization_role_assignments` control fields
 apply uniformly to the distinct reference and remote extension blocks.
@@ -44,6 +50,8 @@ The following requirements are needed by this module:
 
 - <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
 
+- <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.6)
+
 ## Resources
 
 The following resources are used by this module:
@@ -53,6 +61,8 @@ The following resources are used by this module:
 - [azapi_resource.target_lock](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.target_role_assignments](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [random_uuid.role_assignment_name](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/uuid) (resource)
+- [random_uuid.target_role_assignment_name](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/uuid) (resource)
 - [terraform_data.extension_ownership](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [terraform_data.remote_scope](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [terraform_data.telemetry](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
@@ -191,19 +201,19 @@ Default: `{}`
 
 ### <a name="input_retry"></a> [retry](#input\_retry)
 
-Description: Extension retry controls: error\_message\_regex, interval\_seconds, max\_interval\_seconds. The GET-only reference data source does not support this resource argument.
+Description: Extension retry controls: error\_message\_regex defaults to ScopeLocked, PrincipalNotFound and LinkedAuthorizationFailed; interval\_seconds and max\_interval\_seconds default to 15 and 60. Patterns can be replaced, or set retry to null for provider defaults. Retries do not grant missing permissions. The GET-only reference data source does not support this resource argument.
 
 Type:
 
 ```hcl
 object({
-    error_message_regex  = optional(list(string))
-    interval_seconds     = optional(number)
-    max_interval_seconds = optional(number)
+    error_message_regex  = optional(list(string), ["ScopeLocked", "PrincipalNotFound", "LinkedAuthorizationFailed"])
+    interval_seconds     = optional(number, 15)
+    max_interval_seconds = optional(number, 60)
   })
 ```
 
-Default: `null`
+Default: `{}`
 
 ### <a name="input_role_assignments"></a> [role\_assignments](#input\_role\_assignments)
 

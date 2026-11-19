@@ -19,10 +19,20 @@ module "avm_interfaces" {
   role_assignments                          = local.role_assignments
 }
 
+resource "random_uuid" "role_assignment_name" {
+  for_each = var.role_assignments
+
+  keepers = {
+    scope        = lower(trimsuffix(local.perimeter_resource_id, "/"))
+    principal_id = lower(each.value.principal_id)
+    role_id      = lower(local.role_assignments[each.key].role_definition_id_or_name)
+  }
+}
+
 resource "azapi_resource" "role_assignments" {
   for_each = var.role_assignments
 
-  name                 = module.avm_interfaces.role_assignments_azapi[each.key].name
+  name                 = coalesce(each.value.name, random_uuid.role_assignment_name[each.key].result)
   parent_id            = azapi_resource.this.id
   type                 = var.resource_types.authorization_role_assignments
   body                 = module.avm_interfaces.role_assignments_azapi[each.key].body

@@ -1,24 +1,24 @@
 locals {
-  extension_scopes = merge({
+  # Scope IDs may be unknown until apply; only configuration defines instances.
+  extension_scopes = {
     child = {
       scope       = "${trimsuffix(var.parent_id, "/")}/links/${var.name}"
       lock        = var.lock
       assignments = var.role_assignments
     }
-    }, var.auto_approved_remote_perimeter_resource_id == null ? {} : {
     target = {
-      scope       = trimsuffix(var.auto_approved_remote_perimeter_resource_id, "/")
+      scope       = trimsuffix(coalesce(var.auto_approved_remote_perimeter_resource_id, "unavailable"), "/")
       lock        = local.remote_perimeter_lock
       assignments = var.remote_perimeter_extensions.role_assignments
     }
-  })
+  }
   role_definition_resource_substring = "/providers/microsoft.authorization/roledefinitions/"
   role_definition_scopes = {
     for key, target in local.extension_scopes : key =>
     startswith(lower(target.scope), "/subscriptions/") ? join("/", slice(split("/", target.scope), 0, 3)) : target.scope
   }
   role_lookup_scopes = {
-    for key, target in local.extension_scopes : key => local.role_definition_scopes[key]
+    for key, target in local.extension_scopes : key => target.scope
     if anytrue([for assignment in target.assignments : !strcontains(lower(assignment.role_definition_id_or_name), local.role_definition_resource_substring)])
   }
   role_definition_ids_by_name = {

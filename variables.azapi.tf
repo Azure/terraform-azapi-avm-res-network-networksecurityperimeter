@@ -102,13 +102,13 @@ DESCRIPTION
 
 variable "retry" {
   type = object({
-    error_message_regex  = optional(list(string), ["ScopeLocked"])
+    error_message_regex  = optional(list(string), ["ScopeLocked", "PrincipalNotFound", "LinkedAuthorizationFailed"])
     interval_seconds     = optional(number, 15)
     max_interval_seconds = optional(number, 60)
   })
   default     = {}
   description = <<DESCRIPTION
-Retry configuration for supported AzAPI resources and child modules. The default retries ScopeLocked errors during lock-removal propagation, not update-time unlocking. Set null to use provider defaults.
+Retry configuration for supported AzAPI resources and child modules. Defaults retry ScopeLocked during lock-removal propagation and RBAC PrincipalNotFound/LinkedAuthorizationFailed replication errors. This does not unlock resources during updates or grant missing permissions. Override error_message_regex to replace these patterns, or set null to use provider defaults.
 
 - `error_message_regex` - Retryable error patterns.
 - `interval_seconds` - Initial retry interval in seconds.

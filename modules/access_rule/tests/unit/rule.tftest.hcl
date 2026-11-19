@@ -1,4 +1,14 @@
 mock_provider "azapi" {
+  mock_data "azapi_resource_list" {
+    defaults = {
+      output = {
+        results = [{
+          id        = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
+          role_name = "RG Custom Reader"
+        }]
+      }
+    }
+  }
   mock_data "azapi_client_config" {
     defaults = {
       subscription_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000"
@@ -117,13 +127,17 @@ run "standalone_rule_extensions" {
       reader = {
         name                       = "00000000-0000-0000-0000-000000000010"
         principal_id               = "00000000-0000-0000-0000-000000000011"
-        role_definition_id_or_name = "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
+        role_definition_id_or_name = "rg custom reader"
       }
     }
   }
   assert {
     condition     = output.extension_resource_ids.lock == "${var.parent_id}/accessRules/${var.name}/providers/Microsoft.Authorization/locks/rule-lock" && length(output.extension_resource_ids.role_assignments) == 1
     error_message = "Standalone access-rule extensions must stay at the rule scope."
+  }
+  assert {
+    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == "${var.parent_id}/accessRules/${var.name}" && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/accessRules/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId) && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "PrincipalNotFound") && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "LinkedAuthorizationFailed")
+    error_message = "Rule lookup scope, identity-keyed UUIDs and standalone RBAC retry defaults must be retained."
   }
   providers = {
     azapi  = azapi
