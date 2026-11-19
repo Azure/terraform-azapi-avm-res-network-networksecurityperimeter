@@ -106,6 +106,10 @@ run "remote_identity_and_lists" {
     condition     = contains(azapi_resource.this.replace_triggers_refs, "properties.autoApprovedRemotePerimeterResourceId") && azapi_resource.this.retry.interval_seconds == 7 && azapi_resource.this.timeouts.update == "18m"
     error_message = "Create-only remote retargeting must trigger replacement and expose controls."
   }
+  assert {
+    condition     = azapi_resource.this.body.properties.description == var.description
+    error_message = "An explicitly supplied link description must be preserved."
+  }
   providers = {
     azapi  = azapi
     random = random
@@ -114,6 +118,10 @@ run "remote_identity_and_lists" {
 
 run "null_and_empty_defaults" {
   command = apply
+  assert {
+    condition     = !contains(keys(azapi_resource.this.body.properties), "description")
+    error_message = "A null link description must be omitted from the request body, not serialized as null."
+  }
   assert {
     condition     = azapi_resource.this.body.properties.autoApprovedRemotePerimeterResourceId == null && length(azapi_resource.this.body.properties.localInboundProfiles) == 0 && length(azapi_resource.this.body.properties.remoteInboundProfiles) == 0
     error_message = "Link optional identity and lists must preserve null/empty defaults."

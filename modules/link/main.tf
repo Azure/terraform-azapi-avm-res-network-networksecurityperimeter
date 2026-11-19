@@ -4,12 +4,11 @@ resource "azapi_resource" "this" {
   parent_id = var.parent_id
   type      = var.resource_types.network_network_security_perimeters_links
   body = {
-    properties = {
+    properties = merge({
       autoApprovedRemotePerimeterResourceId = var.auto_approved_remote_perimeter_resource_id
-      description                           = var.description
       localInboundProfiles                  = var.local_inbound_profiles
       remoteInboundProfiles                 = var.remote_inbound_profiles
-    }
+    }, var.description == null ? {} : { description = var.description })
   }
   ignore_body_changes    = length(var.ignore_body_changes.network_network_security_perimeters_links) > 0 ? var.ignore_body_changes.network_network_security_perimeters_links : null
   replace_triggers_refs  = ["properties.autoApprovedRemotePerimeterResourceId"]
