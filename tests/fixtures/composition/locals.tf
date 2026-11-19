@@ -10,14 +10,14 @@ locals {
     role_name = {
       lock = null, remote_lock = null
       assignments = { reader = {
-        principal_id               = "00000000-0000-0000-0000-000000000001"
+        principal_id               = terraform_data.principal["one"].output
         role_definition_id_or_name = "Reader"
       } }
     }
     role_id = {
       lock = null, remote_lock = null
       assignments = { reader = {
-        principal_id               = "00000000-0000-0000-0000-000000000002"
+        principal_id               = terraform_data.principal["two"].output
         role_definition_id_or_name = "/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
       } }
     }

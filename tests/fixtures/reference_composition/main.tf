@@ -3,6 +3,12 @@ resource "terraform_data" "remote" {
   input = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/remote"
 }
 
+resource "terraform_data" "principal" {
+  for_each = toset(["one", "two"])
+
+  input = each.key
+}
+
 module "reference" {
   source   = "../../../modules/link_reference"
   for_each = local.cases
@@ -17,4 +23,5 @@ module "reference" {
     role_assignments = each.value.assignments
   }
   remote_perimeter_resource_id = terraform_data.remote.output
+  role_assignments             = each.value.assignments
 }

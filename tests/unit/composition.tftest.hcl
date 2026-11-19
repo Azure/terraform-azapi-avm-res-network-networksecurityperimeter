@@ -1,4 +1,5 @@
-# PLAN only: no mock ID defaults/overrides that could hide unknown-ID failures.
+# PLAN only: both remote IDs and principal IDs stay unknown; keys stay static.
+# No mock ID defaults/overrides that could hide unknown-value failures.
 mock_provider "azapi" {
   mock_data "azapi_resource_list" {
     defaults = {
@@ -33,6 +34,10 @@ run "link" {
     condition     = length(module.link) == 5
     error_message = "All five configured extension shapes must plan with an unknown remote resource output."
   }
+  assert {
+    condition     = keys(module.link["role_id"].extension_resource_ids.role_assignments) == ["reader"] && keys(module.link["role_name"].extension_resource_ids.role_assignments) == ["reader"]
+    error_message = "Standalone link assignment addresses must retain configured keys with unknown principal and remote IDs."
+  }
 }
 
 run "reference" {
@@ -43,6 +48,10 @@ run "reference" {
   assert {
     condition     = length(module.reference) == 5
     error_message = "GET-only reference extensions must plan with an unknown remote resource output."
+  }
+  assert {
+    condition     = keys(module.reference["role_id"].extension_resource_ids.role_assignments) == ["reader"] && keys(module.reference["role_name"].extension_resource_ids.role_assignments) == ["reader"]
+    error_message = "Standalone reference assignment addresses must retain configured keys with unknown principal and remote IDs."
   }
 }
 
@@ -58,6 +67,10 @@ run "nested_link" {
     condition     = length(module.nested) == 5 && alltrue([for instance in module.nested : length(instance.links) == 1])
     error_message = "Root ownership bookkeeping and nested links must accept unknown remote module IDs."
   }
+  assert {
+    condition     = keys(module.nested["role_id"].links.composed.extension_resource_ids.role_assignments) == ["reader"] && keys(module.nested["role_name"].links.composed.extension_resource_ids.role_assignments) == ["reader"]
+    error_message = "Nested link assignment addresses must retain configured keys with unknown principal and remote IDs."
+  }
 }
 
 run "nested_reference" {
@@ -71,6 +84,21 @@ run "nested_reference" {
   assert {
     condition     = length(module.nested) == 5 && alltrue([for instance in module.nested : length(instance.link_references) == 1])
     error_message = "Root ownership bookkeeping and nested references must accept unknown remote module IDs."
+  }
+  assert {
+    condition     = keys(module.nested["role_id"].link_references.composed.extension_resource_ids.role_assignments) == ["reader"] && keys(module.nested["role_name"].link_references.composed.extension_resource_ids.role_assignments) == ["reader"]
+    error_message = "Nested reference assignment addresses must retain configured keys with unknown principal and remote IDs."
+  }
+}
+
+run "association" {
+  command = plan
+  module {
+    source = "./tests/fixtures/association_composition"
+  }
+  assert {
+    condition     = keys(module.association.extension_resource_ids.role_assignments) == ["lookup", "reader"]
+    error_message = "Association assignment addresses must retain configured keys with unknown principal and target IDs."
   }
 }
 

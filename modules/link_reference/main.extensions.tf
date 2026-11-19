@@ -49,7 +49,7 @@ resource "random_uuid" "role_assignment_name" {
 }
 
 resource "random_uuid" "target_role_assignment_name" {
-  for_each = try(local.extension_scopes.target.assignments, {})
+  for_each = local.extension_scopes.target.assignments
 
   keepers = {
     scope        = lower(local.extension_scopes.target.scope)
@@ -104,7 +104,7 @@ resource "azapi_resource" "role_assignments" {
 }
 
 resource "azapi_resource" "target_role_assignments" {
-  for_each = try(local.extension_scopes.target.assignments, {})
+  for_each = local.extension_scopes.target.assignments
 
   name                 = coalesce(each.value.name, random_uuid.target_role_assignment_name[each.key].result)
   parent_id            = local.extension_scopes.target.scope

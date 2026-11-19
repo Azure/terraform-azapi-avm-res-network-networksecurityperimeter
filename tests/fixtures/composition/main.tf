@@ -1,3 +1,9 @@
+resource "terraform_data" "principal" {
+  for_each = toset(["one", "two"])
+
+  input = each.key
+}
+
 # No ID override: the mocked resource ID is genuinely unknown during PLAN.
 module "remote" {
   source   = "../../.."
@@ -23,6 +29,7 @@ module "nested" {
   link_references = var.mode == "nested_reference" ? {
     composed = {
       name                         = "composed"
+      role_assignments             = each.value.assignments
       remote_perimeter_resource_id = module.remote["remote"].resource_id
       remote_perimeter_extensions = {
         lock             = each.value.remote_lock
@@ -33,6 +40,7 @@ module "nested" {
   links = var.mode == "nested_link" ? {
     composed = {
       name                                       = "composed"
+      role_assignments                           = each.value.assignments
       auto_approved_remote_perimeter_resource_id = module.remote["remote"].resource_id
       remote_perimeter_extensions = {
         lock             = each.value.remote_lock
