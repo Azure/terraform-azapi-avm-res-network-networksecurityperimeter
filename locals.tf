@@ -1,4 +1,5 @@
 locals {
+  perimeter_resource_id              = "${var.parent_id}/providers/Microsoft.Network/networkSecurityPerimeters/${var.name}"
   role_definition_resource_substring = "/providers/microsoft.authorization/roledefinitions/"
   subscription_id                    = provider::azapi::parse_resource_id("Microsoft.Resources/resourceGroups", var.parent_id).subscription_id
   role_definition_ids_by_name = length(data.azapi_resource_list.role_definitions) == 0 ? {} : {

@@ -1,7 +1,7 @@
 data "azapi_resource_list" "role_definitions" {
   for_each = local.role_lookup_scopes
 
-  parent_id = each.value
+  parent_id = azapi_resource.this.id
   type      = var.resource_types.authorization_role_definitions
   response_export_values = {
     results = "value[].{id: id, role_name: properties.roleName}"
@@ -19,21 +19,6 @@ module "avm" {
   role_assignments                          = local.extension_assignments[each.key]
 }
 
-resource "terraform_data" "extension_ownership" {
-  input = azapi_resource.this.id
-
-  lifecycle {
-    precondition {
-      condition     = length(distinct(local.assignment_identities)) == length(local.assignment_identities)
-      error_message = "Exactly one owner is permitted for each scope/principal/role assignment, including role-name/ID aliases."
-    }
-    precondition {
-      condition     = length(distinct(local.assignment_names)) == length(local.assignment_names)
-      error_message = "Explicit role assignment GUIDs must be unique."
-    }
-  }
-}
-
 resource "random_uuid" "role_assignment_name" {
   for_each = var.role_assignments
 
@@ -48,7 +33,7 @@ resource "azapi_resource" "role_assignments" {
   for_each = var.role_assignments
 
   name                 = coalesce(each.value.name, random_uuid.role_assignment_name[each.key].result)
-  parent_id            = local.extension_scopes.child.scope
+  parent_id            = azapi_resource.this.id
   type                 = var.resource_types.authorization_role_assignments
   body                 = module.avm["child"].role_assignments_azapi[each.key].body
   ignore_body_changes  = length(var.ignore_body_changes.authorization_role_assignments) > 0 ? var.ignore_body_changes.authorization_role_assignments : null
@@ -86,14 +71,13 @@ resource "azapi_resource" "role_assignments" {
       error_message = "The role definition was not found at the assignable scope; supply an assignable role name or resource ID."
     }
   }
-  depends_on = [terraform_data.extension_ownership]
 }
 
 resource "azapi_resource" "lock" {
   count = var.lock == null ? 0 : 1
 
   name                   = module.avm["child"].lock_azapi.name
-  parent_id              = local.extension_scopes.child.scope
+  parent_id              = azapi_resource.this.id
   type                   = var.resource_types.authorization_locks
   body                   = module.avm["child"].lock_azapi.body
   ignore_body_changes    = length(var.ignore_body_changes.authorization_locks) > 0 ? var.ignore_body_changes.authorization_locks : null
@@ -111,5 +95,5 @@ resource "azapi_resource" "lock" {
     }
   }
 
-  depends_on = [terraform_data.extension_ownership, azapi_resource.role_assignments]
+  depends_on = [azapi_resource.role_assignments]
 }

@@ -18,6 +18,13 @@ mock_provider "azapi" {
 
 mock_provider "random" {}
 
+override_resource {
+  target = azapi_resource.this
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp/resourceAssociations/association"
+  }
+}
+
 variables {
   name                     = "association"
   parent_id                = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp"
@@ -227,7 +234,7 @@ run "normalized_target_direct_controls_and_body" {
     timeouts = { create = "19m", read = "2m", update = "7m", delete = "8m" }
   }
   assert {
-    condition     = azapi_resource.lock[0].parent_id == "${var.parent_id}/resourceAssociations/${var.name}" && azapi_resource.target_lock[0].parent_id == trimsuffix(var.private_link_resource_id, "/") && azapi_resource.target_role_assignments["reader"].parent_id == trimsuffix(var.private_link_resource_id, "/")
+    condition     = azapi_resource.lock[0].parent_id == azapi_resource.this.id && azapi_resource.target_lock[0].parent_id == trimsuffix(var.private_link_resource_id, "/") && azapi_resource.target_role_assignments["reader"].parent_id == trimsuffix(var.private_link_resource_id, "/")
     error_message = "Child and target must remain distinct graph nodes; target writes must use the normalized external scope."
   }
   assert {
@@ -263,7 +270,7 @@ run "normalized_target_direct_controls_and_body" {
   }
 }
 
-run "reject_child_target_explicit_guid_reuse" {
+run "leaves_child_target_explicit_guid_conflicts_to_azure" {
   command = plan
   variables {
     role_assignments = {
@@ -283,7 +290,6 @@ run "reject_child_target_explicit_guid_reuse" {
       }
     }
   }
-  expect_failures = [terraform_data.extension_ownership]
   providers = {
     azapi  = azapi
     random = random

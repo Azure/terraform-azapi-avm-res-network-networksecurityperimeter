@@ -1,7 +1,7 @@
 data "azapi_resource_list" "role_definitions" {
   count = anytrue([for assignment in var.role_assignments : !strcontains(lower(assignment.role_definition_id_or_name), local.role_definition_resource_substring)]) ? 1 : 0
 
-  parent_id = var.parent_id
+  parent_id = azapi_resource.this.id
   type      = var.resource_types.authorization_role_definitions
   response_export_values = {
     results = "value[].{id: id, role_name: properties.roleName}"
@@ -71,5 +71,4 @@ resource "azapi_resource" "role_assignments" {
     }
 
   }
-  depends_on = [terraform_data.extension_ownership]
 }

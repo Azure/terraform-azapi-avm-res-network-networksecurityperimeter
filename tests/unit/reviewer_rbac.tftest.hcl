@@ -51,8 +51,8 @@ run "generated_identity_lookup_and_default_retries" {
     error_message = "All three immutable assignment identities must participate in UUID rotation."
   }
   assert {
-    condition     = data.azapi_resource_list.role_definitions[0].parent_id == var.parent_id && data.azapi_resource_list.extension_role_definitions["0"].parent_id == lower(local.perimeter_resource_id)
-    error_message = "Primary and ownership-check lookups must not discard RG-scoped role visibility."
+    condition     = data.azapi_resource_list.role_definitions[0].parent_id == azapi_resource.this.id
+    error_message = "Primary role lookup must depend on the created NSP scope, retaining inherited RG-scoped custom roles."
   }
   assert {
     condition     = azapi_resource.role_assignments["generated"].retry.error_message_regex == tolist(["ScopeLocked", "PrincipalNotFound", "LinkedAuthorizationFailed"])

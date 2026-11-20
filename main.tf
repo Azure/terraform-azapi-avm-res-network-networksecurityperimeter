@@ -24,6 +24,4 @@ resource "azapi_resource" "this" {
       delete = timeouts.value.delete
     }
   }
-
-  depends_on = [terraform_data.extension_ownership]
 }

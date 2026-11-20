@@ -18,6 +18,14 @@ run "reject_self_target" {
   expect_failures = [terraform_data.remote_scope]
 }
 
+run "reject_remote_lock_without_id" {
+  command = plan
+  variables {
+    lock = { kind = "CanNotDelete" }
+  }
+  expect_failures = [terraform_data.remote_scope]
+}
+
 mock_provider "azapi" {
   mock_data "azapi_resource_list" {
     defaults = {
@@ -37,6 +45,13 @@ mock_provider "azapi" {
 }
 
 mock_provider "random" {}
+
+override_resource {
+  target = azapi_resource.this
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp/links/link"
+  }
+}
 
 variables {
   name             = "link"

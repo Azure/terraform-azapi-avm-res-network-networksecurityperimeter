@@ -46,15 +46,6 @@ locals {
       })
     }
   }
-  lock_scopes = [for target in local.extension_scopes : lower(target.scope) if target.lock != null]
-  assignment_identities = flatten([
-    for key, assignments in local.extension_assignments : [
-      for assignment in assignments : lower("${local.extension_scopes[key].scope}|${assignment.principal_id}|${basename(assignment.role_definition_id_or_name)}")
-    ]
-  ])
-  assignment_names = flatten([
-    for target in local.extension_scopes : [for assignment in target.assignments : lower(assignment.name) if assignment.name != null]
-  ])
   remote_perimeter_lock = !var.remote_perimeter_extensions.lock_inheritance_enabled ? null : (
     var.remote_perimeter_extensions.lock != null ? var.remote_perimeter_extensions.lock : var.lock
   )

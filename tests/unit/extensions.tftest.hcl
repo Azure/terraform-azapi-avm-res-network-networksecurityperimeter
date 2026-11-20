@@ -14,6 +14,12 @@ mock_provider "azapi" {
       }
     }
   }
+  mock_data "azapi_resource" {
+    defaults = {
+      id     = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp-test/linkReferences/b"
+      output = { properties = { remotePerimeterResourceId = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/remote" } }
+    }
+  }
 }
 
 mock_provider "random" {}
@@ -34,6 +40,18 @@ override_resource {
 
 run "child_and_external_owners" {
   command = apply
+  override_resource {
+    target = module.nsp_access_rule["rule"].azapi_resource.this
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp-test/profiles/profile/accessRules/rule"
+    }
+  }
+  override_resource {
+    target = module.nsp_link["remote"].azapi_resource.this
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp-test/links/remote"
+    }
+  }
   override_resource {
     target = module.nsp_resource_association["storage"].azapi_resource.target_role_assignments["reader"]
     values = {
@@ -130,6 +148,12 @@ run "child_and_external_owners" {
 
 run "repeated_remote_single_extension_owner" {
   command = apply
+  override_resource {
+    target = module.nsp_link["a"].azapi_resource.this
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp-test/links/a"
+    }
+  }
   variables {
     lock = { kind = "CanNotDelete" }
     links = {
@@ -154,7 +178,7 @@ run "repeated_remote_single_extension_owner" {
   }
 }
 
-run "reject_repeated_remote_lock_owner" {
+run "leaves_repeated_remote_lock_conflicts_to_azure" {
   command = plan
   variables {
     lock = { kind = "CanNotDelete" }
@@ -169,14 +193,13 @@ run "reject_repeated_remote_lock_owner" {
       }
     }
   }
-  expect_failures = [terraform_data.extension_ownership]
   providers = {
     azapi  = azapi
     random = random
   }
 }
 
-run "reject_same_target_different_paths" {
+run "leaves_cross_path_lock_conflicts_to_azure" {
   command = plan
   variables {
     lock = { kind = "CanNotDelete" }
@@ -193,7 +216,6 @@ run "reject_same_target_different_paths" {
       }
     }
   }
-  expect_failures = [terraform_data.extension_ownership]
   providers = {
     azapi  = azapi
     random = random
@@ -222,7 +244,7 @@ run "reject_repeated_paas_association" {
   }
 }
 
-run "reject_cross_path_role_alias_duplicate" {
+run "leaves_cross_path_role_alias_conflicts_to_azure" {
   command = plan
   variables {
     links = {
@@ -254,20 +276,6 @@ run "reject_cross_path_role_alias_duplicate" {
       }
     }
   }
-  expect_failures = [terraform_data.extension_ownership]
-  providers = {
-    azapi  = azapi
-    random = random
-  }
-}
-
-run "reject_manual_remote_lock_without_id" {
-  command = plan
-  variables {
-    lock  = { kind = "CanNotDelete" }
-    links = { manual = { name = "manual" } }
-  }
-  expect_failures = [terraform_data.extension_ownership]
   providers = {
     azapi  = azapi
     random = random
@@ -276,6 +284,12 @@ run "reject_manual_remote_lock_without_id" {
 
 run "child_lock_does_not_become_root_target_fallback" {
   command = apply
+  override_resource {
+    target = module.nsp_link["a"].azapi_resource.this
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp-test/links/a"
+    }
+  }
   variables {
     links = {
       a = {
@@ -295,7 +309,7 @@ run "child_lock_does_not_become_root_target_fallback" {
   }
 }
 
-run "reject_cross_path_contextual_role_alias" {
+run "leaves_cross_path_contextual_role_aliases_to_azure" {
   command = plan
   variables {
     links = {
@@ -327,7 +341,6 @@ run "reject_cross_path_contextual_role_alias" {
       }
     }
   }
-  expect_failures = [terraform_data.extension_ownership]
   providers = {
     azapi  = azapi
     random = random

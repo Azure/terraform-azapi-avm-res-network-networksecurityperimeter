@@ -2,6 +2,15 @@
 
 Provider-mocked tests run with `avm test unit`.
 
+`fixtures/role_lookup` reproduces fresh NSP/profile/rule scopes whose names and
+parent IDs are already known, including a standalone profile with a literal
+parent ID. Save a real-provider plan with telemetry disabled, export it with
+`terraform show -json`, then run
+`.\tests\Assert-RoleLookupPlan.ps1 -PlanPath <plan.json>`. It requires all four
+role-name reads to be deferred until their scope resources exist and assignments
+to wait for resolution. The fixture must plan without Azure requests; it does
+not prove live deployment, role visibility or cleanup.
+
 `Assert-LinkProfileGraph.ps1` verifies reachability in the actual DOT emitted
 by `terraform graph -plan=<saved-plan>`. Supply the exact quoted-node contents
 as `-LinkNode` and `-ProfileNode` (without the surrounding DOT quotes), and

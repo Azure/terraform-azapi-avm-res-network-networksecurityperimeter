@@ -8,6 +8,13 @@ mock_provider "azapi" {
 
 mock_provider "random" {}
 
+override_resource {
+  target = azapi_resource.this
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp/profiles/profile"
+  }
+}
+
 variables {
   name             = "profile"
   parent_id        = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp"

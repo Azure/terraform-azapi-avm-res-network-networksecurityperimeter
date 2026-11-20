@@ -18,6 +18,13 @@ mock_provider "azapi" {
 
 mock_provider "random" {}
 
+override_resource {
+  target = azapi_resource.this
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp/profiles/profile"
+  }
+}
+
 variables {
   name             = "profile"
   parent_id        = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp"
@@ -45,7 +52,7 @@ run "explicit_scope_body_identity_controls" {
     ignore_body_changes = { authorization_role_assignments = ["properties.description"] }
   }
   assert {
-    condition     = azapi_resource.role_assignments["reader"].parent_id == "${var.parent_id}/profiles/${var.name}" && azapi_resource.role_assignments["reader"].name == var.role_assignments.reader.name
+    condition     = azapi_resource.role_assignments["reader"].parent_id == azapi_resource.this.id && azapi_resource.role_assignments["reader"].name == var.role_assignments.reader.name
     error_message = "Assignment scope and explicit GUID must be preserved."
   }
   assert {
@@ -53,8 +60,8 @@ run "explicit_scope_body_identity_controls" {
     error_message = "Canonical role input must map to the verified ARM body and case-insensitive role lookup."
   }
   assert {
-    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == "${var.parent_id}/profiles/${var.name}" && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/profiles/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId)
-    error_message = "Lookup must use the profile scope while UUID keepers track the independently normalized role ID and scope."
+    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == azapi_resource.this.id && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/profiles/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId)
+    error_message = "Lookup must depend on the created profile while UUID keepers retain their normalized role ID and scope."
   }
   assert {
     condition     = azapi_resource.lock[0].name == "lock-CanNotDelete" && azapi_resource.lock[0].body.properties.level == "CanNotDelete" && azapi_resource.lock[0].retry.interval_seconds == 3 && azapi_resource.role_assignments["reader"].timeouts.delete == "8m" && azapi_resource.lock[0].type == var.resource_types.authorization_locks
@@ -66,7 +73,7 @@ run "explicit_scope_body_identity_controls" {
   }
 }
 
-run "reject_role_alias_duplicate" {
+run "leaves_role_alias_conflicts_to_azure" {
   command = plan
   variables {
     role_assignments = {
@@ -80,7 +87,6 @@ run "reject_role_alias_duplicate" {
       }
     }
   }
-  expect_failures = [terraform_data.extension_ownership]
   providers = {
     azapi  = azapi
     random = random
@@ -99,7 +105,7 @@ run "direct_owner_immutable_controls" {
     }
   }
   assert {
-    condition     = length(azapi_resource.lock) == 0 && azapi_resource.role_assignments["reader"].parent_id == "${var.parent_id}/profiles/${var.name}" && azapi_resource.role_assignments["reader"].replace_triggers_external_values.principal_id == var.role_assignments.reader.principal_id && output.extension_resource_ids.lock == null
+    condition     = length(azapi_resource.lock) == 0 && azapi_resource.role_assignments["reader"].parent_id == azapi_resource.this.id && azapi_resource.role_assignments["reader"].replace_triggers_external_values.principal_id == var.role_assignments.reader.principal_id && output.extension_resource_ids.lock == null
     error_message = "The direct owner must preserve immutable principal controls and leave optional locks absent."
   }
   providers = {
@@ -108,7 +114,7 @@ run "direct_owner_immutable_controls" {
   }
 }
 
-run "reject_duplicate_explicit_guid" {
+run "leaves_explicit_guid_conflicts_to_azure" {
   command = plan
   variables {
     role_assignments = {
@@ -124,14 +130,13 @@ run "reject_duplicate_explicit_guid" {
       }
     }
   }
-  expect_failures = [terraform_data.extension_ownership]
   providers = {
     azapi  = azapi
     random = random
   }
 }
 
-run "reject_contextual_role_definition_alias" {
+run "leaves_contextual_role_definition_aliases_to_azure" {
   command = plan
   variables {
     role_assignments = {
@@ -145,7 +150,6 @@ run "reject_contextual_role_definition_alias" {
       }
     }
   }
-  expect_failures = [terraform_data.extension_ownership]
   providers = {
     azapi  = azapi
     random = random

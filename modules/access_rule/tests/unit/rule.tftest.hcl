@@ -18,6 +18,13 @@ mock_provider "azapi" {
 
 mock_provider "random" {}
 
+override_resource {
+  target = azapi_resource.this
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp/profiles/profile/accessRules/rule"
+  }
+}
+
 variables {
   name             = "rule"
   parent_id        = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/nsp/profiles/profile"
@@ -136,7 +143,7 @@ run "standalone_rule_extensions" {
     error_message = "Standalone access-rule extensions must stay at the rule scope."
   }
   assert {
-    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == "${var.parent_id}/accessRules/${var.name}" && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/accessRules/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId) && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "PrincipalNotFound") && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "LinkedAuthorizationFailed")
+    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == azapi_resource.this.id && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/accessRules/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId) && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "PrincipalNotFound") && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "LinkedAuthorizationFailed")
     error_message = "Rule lookup scope, identity-keyed UUIDs and standalone RBAC retry defaults must be retained."
   }
   providers = {

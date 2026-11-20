@@ -79,8 +79,10 @@ Per-resource `resource_types` and `ignore_body_changes` plus shared `retry` and
 notation; ignored configuration is not sent to Azure, and changes take effect
 only after apply. Do not ignore owned collections to conceal drift.
 
-Role names resolve case-insensitively at the assignment's applicable scope
-(the existing resource group for the primary perimeter); role-ID subscription
+Role names resolve case-insensitively at the assignment scope. Lookups and
+extension writes on owned resources depend on those resources being created;
+referenced targets retain their supplied resource dependencies. Custom roles
+inherited from the resource group remain visible. Role-ID subscription
 qualification is separate from lookup scope.
 With AzAPI there is no Microsoft Graph pre-check: setting
 `skip_service_principal_aad_check = true` supplies `principalType = ServicePrincipal`
@@ -131,7 +133,7 @@ while unknown at plan time. Keep collection/assignment keys, extension presence
 and role selectors plan-known. Terraform retains the real resource dependency:
 the remote perimeter and the initiating link can be created in a single apply;
 no separate remote deployment, precomputed ID or targeted apply is required.
-Scope/ownership validations that need those IDs run once they resolve, before
+Remote-target input checks that need those IDs run once they resolve, before
 extension writes. GET-only references still require their service-created object
 to exist; when composing its producing link in the same apply, carry that link's
 output dependency through the relevant reference input.
@@ -151,13 +153,11 @@ reference module call does delete **extensions owned by that call**; a GET-only
 reference remains untouched. Removing an extension while keeping its target
 does not transfer target lifecycle ownership.
 
-Repeated remote references are allowed with exactly one lock owner: disable
-inheritance on every other path. Duplicate locks at a normalized target scope,
-duplicate scope/principal/resolved-role assignments (including name/ID aliases),
-and reused explicit assignment GUIDs are rejected across collections. A PaaS
-target can have only one association owner in this perimeter. Case-insensitive
-ARM identities are compared without a trailing slash. These checks cannot
-detect a competing Terraform state; consumers must coordinate ownership.
+Consumers must coordinate extension ownership across repeated references,
+collection paths and Terraform states. Disable lock inheritance on paths that
+do not own the target lock. The module does not perform duplicate-assignment
+or GUID-uniqueness checks; Azure enforces its role-assignment constraints.
+A PaaS target can have only one association owner in this perimeter.
 
 Existing externally owned locks require opt-out. Existing assignments require
 empty RBAC inputs or deliberate state adoption preserving their GUIDs.
@@ -179,8 +179,8 @@ distinct child-scoped and target-scoped resource blocks. There are no additional
 per-item controls or precedence layers; resource bodies and scope ownership
 remain separate.
 Shared retry/timeouts pass through to every managed extension, not to unsupported
-GET-only data-source arguments. Custom roles not assignable at subscription
-scope should use full role-definition IDs.
+GET-only data-source arguments. Role names are resolved at their assignment
+scope, including custom roles inherited from a resource group.
 
 Referenced PaaS IDs are polymorphic: different Private Link-capable ARM types
 are supported. They are deliberately not validated against a single resource
@@ -237,10 +237,8 @@ The following resources are used by this module:
 - [azapi_resource.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.this](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [random_uuid.role_assignment_name](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/uuid) (resource)
-- [terraform_data.extension_ownership](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [terraform_data.telemetry](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [azapi_client_config.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
-- [azapi_resource_list.extension_role_definitions](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/resource_list) (data source)
 - [azapi_resource_list.role_definitions](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/resource_list) (data source)
 
 <!-- markdownlint-disable MD013 -->

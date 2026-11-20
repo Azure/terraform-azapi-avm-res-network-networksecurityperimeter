@@ -40,12 +40,4 @@ locals {
       })
     }
   }
-  assignment_identities = flatten([
-    for key, assignments in local.extension_assignments : [
-      for assignment in assignments : lower("${local.extension_scopes[key].scope}|${assignment.principal_id}|${basename(assignment.role_definition_id_or_name)}")
-    ]
-  ])
-  assignment_names = flatten([
-    for target in local.extension_scopes : [for assignment in target.assignments : lower(assignment.name) if assignment.name != null]
-  ])
 }

@@ -1,5 +1,5 @@
 # PLAN only: both remote IDs and principal IDs stay unknown; keys stay static.
-# No mock ID defaults/overrides that could hide unknown-value failures.
+# No managed-resource ID overrides that could hide unknown-value failures.
 mock_provider "azapi" {
   mock_data "azapi_resource_list" {
     defaults = {
@@ -13,6 +13,7 @@ mock_provider "azapi" {
   }
   mock_data "azapi_resource" {
     defaults = {
+      id     = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/local/linkReferences/existing"
       output = { properties = { remotePerimeterResourceId = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/test/providers/Microsoft.Network/networkSecurityPerimeters/remote" } }
     }
   }
@@ -24,6 +25,17 @@ mock_provider "azapi" {
 }
 
 mock_provider "random" {}
+
+run "role_lookup_with_known_parent_scope" {
+  command = plan
+  module {
+    source = "./tests/fixtures/role_lookup"
+  }
+  assert {
+    condition     = keys(module.perimeter.profiles) == ["profile"] && keys(module.perimeter.access_rules) == ["rule"]
+    error_message = "Fresh scopes with name-based roles must plan without an ownership dependency cycle."
+  }
+}
 
 run "link" {
   command = plan
@@ -65,7 +77,7 @@ run "nested_link" {
   }
   assert {
     condition     = length(module.nested) == 5 && alltrue([for instance in module.nested : length(instance.links) == 1])
-    error_message = "Root ownership bookkeeping and nested links must accept unknown remote module IDs."
+    error_message = "Nested links must accept unknown remote module IDs."
   }
   assert {
     condition     = keys(module.nested["role_id"].links.composed.extension_resource_ids.role_assignments) == ["reader"] && keys(module.nested["role_name"].links.composed.extension_resource_ids.role_assignments) == ["reader"]
@@ -83,7 +95,7 @@ run "nested_reference" {
   }
   assert {
     condition     = length(module.nested) == 5 && alltrue([for instance in module.nested : length(instance.link_references) == 1])
-    error_message = "Root ownership bookkeeping and nested references must accept unknown remote module IDs."
+    error_message = "Nested references must accept unknown remote module IDs."
   }
   assert {
     condition     = keys(module.nested["role_id"].link_references.composed.extension_resource_ids.role_assignments) == ["reader"] && keys(module.nested["role_name"].link_references.composed.extension_resource_ids.role_assignments) == ["reader"]

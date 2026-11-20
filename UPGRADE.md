@@ -46,6 +46,15 @@ manual-null target live lifecycle, new-unknown-remote reference topology, or
 replacement under unchanged ancestor locks. No automatic ancestor unlock or
 blanket upgrade safety is claimed.
 
+The subsequent required `default` E2E run at `3c9a7c8` failed because aggregate
+ownership checks read role definitions at NSP/child scopes before creation.
+Its automatic destroy also failed; cleanup of that CI fixture is not verified.
+The current correction removes aggregate and child duplicate/GUID ownership
+checks and orders role-name reads and extension writes after the actual scope
+resource. Assignment keys, UUID keepers and immutable-input triggers are
+unchanged. Earlier live evidence remains attributed to its original candidates;
+it does not verify this corrected dependency graph or its upgrade/destroy paths.
+
 Do not replay child moves when state already has the
 destination addresses. Review the candidate's parent-ID, output, root provider
 conversion, link-reference and extension-ownership changes against that actual
@@ -119,8 +128,9 @@ Stage ancestor unlock/change/relock as documented below; UUID rotation does not
 unlock an unchanged lock. Link-owned locks now follow remote-target replacement
 of the link at its unchanged ARM ID.
 
-Role-name lookup uses each assignment's applicable scope (the existing RG for
-primary assignments), independently of subscription qualification of tenant-level
+Role-name lookup uses the actual assignment scope after the owned resource
+exists, including the primary NSP. Inherited RG-scoped custom roles remain
+visible, independently of subscription qualification of tenant-level
 role IDs. Defaults now retry `ScopeLocked`, `PrincipalNotFound` and
 `LinkedAuthorizationFailed`; custom `retry.error_message_regex` replaces these
 patterns and `retry = null` restores provider defaults. These are bounded
