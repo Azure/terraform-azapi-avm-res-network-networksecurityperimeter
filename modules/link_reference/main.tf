@@ -1,11 +1,14 @@
-# Microsoft.Network/networkSecurityPerimeters/linkReferences@2025-05-01
-#
-# Link references are automatically created on the remote NSP when an NSP link
-# is established. All properties are read-only in the current API version.
-resource "azapi_resource" "this" {
+# The service creates the counterpart. No PUT operation exists in this API.
+data "azapi_resource" "this" {
   name                   = var.name
-  parent_id              = var.network_security_perimeter_resource_id
-  type                   = "Microsoft.Network/networkSecurityPerimeters/linkReferences@2025-05-01"
-  body                   = {}
-  response_export_values = []
+  parent_id              = var.parent_id
+  type                   = var.resource_types.network_network_security_perimeters_link_references
+  response_export_values = ["properties"]
+}
+
+removed {
+  from = azapi_resource.this
+  lifecycle {
+    destroy = false
+  }
 }

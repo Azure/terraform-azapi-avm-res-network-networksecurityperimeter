@@ -1,12 +1,353 @@
-# Upgrading from 0.1.0 to 0.2.0
+# Network Security Perimeter upgrade guide
 
-**0.2.0 is a planned breaking release, not a backwards-compatible patch.** These instructions describe the child-module design following 0.1.0. Wait for the reviewed release before selecting its Registry version.
+## Status and baseline
+
+This guide describes the identity-preserving path from released
+v0.1.0 (`8c5aaaad4d8674b1e742dd0ad830fa80a66c757a`) to an earlier AzAPI candidate.
+Bounded independent same-state verification covered adoption with the association
+target unchanged and no replacements, subsequent target replacement with owned
+locks/RBAC, in-place profile/access-mode changes and normal teardown. Telemetry
+was disabled. Evidence is exact-source-specific, not proof for every state or
+optional configuration; the unverified exceptions below remain unverified.
+Do not apply an upgrade based on mock tests alone. Existing v0.2.0 and
+main-sourced consumers must use the qualifications below.
+
+Released v0.2.0 (`b1933fb2b8c857d97a2e642873a768256203f48c`) already
+contains the keyed child extraction. The v0.2.0-to-`9c7e545` path was verified
+in Azure in the protected r24 evidence, including default-enabled telemetry,
+retained identities and normal cleanup. That evidence remains attributed to
+`9c7e545`, with its fixture-only known-ID and service-description recoveries.
+Subsequent Azure verification is scoped to these exact candidates:
+
+- **`c5f8c679`**: actual v0.2.0 same-state upgrade preserved existing generated
+  assignment GUIDs and resource identities. A subsequent principal mutation,
+  with staged unlock/relock, generated a new assignment GUID; normal teardown
+  passed. That fixture contained no links or link references.
+- **`1fba7dda`**: fresh single-apply unknown remote-ID/new-principal composition,
+  principal/role GUID mutations, and RG-only custom-role NAME lookup passed.
+  Its unknown-new-target link-retarget plan incorrectly proposed an update and
+  was rejected before writes; first normal teardown passed.
+- **`0f34f118`**: fresh single-apply composition and actual null-description
+  omission passed. Retargeting to a newly planned, unknown perimeter correctly
+  replaced the same-ID link and its own lock, rotated the target-scope assignment
+  GUID, preserved unrelated identities, and completed first normal teardown.
+
+These review runs used Terraform 1.17.2, AzAPI 2.14.0, random 3.9.1 and interfaces
+0.10.0. Paired refreshed convergence plans contained no infrastructure changes,
+but default-enabled telemetry produces narrowly classified timestamp updates;
+they were not strict whole-plan no-ops. Retry defaults were configured correctly;
+retry recovery/timing was not exercised because actual writes succeeded.
+
+Only link runtime and link tests changed from `c5f8c679` through `1fba7dda` to
+`0f34f118`; retained nonlink upgrade and role-mutation evidence keeps its
+original execution SHA. This does not establish a released link/reference
+upgrade, first-time native-trigger adoption combined with retargeting,
+manual-null target live lifecycle, new-unknown-remote reference topology, or
+replacement under unchanged ancestor locks. No automatic ancestor unlock or
+blanket upgrade safety is claimed.
+
+The subsequent required `default` E2E run at `3c9a7c8` failed because aggregate
+ownership checks read role definitions at NSP/child scopes before creation.
+Its automatic destroy also failed; cleanup of that CI fixture is not verified.
+The current correction removes aggregate and child duplicate/GUID ownership
+checks and orders role-name reads and extension writes after the actual scope
+resource. Assignment keys, UUID keepers and immutable-input triggers are
+unchanged. Earlier live evidence remains attributed to its original candidates;
+it does not verify this corrected dependency graph or its upgrade/destroy paths.
+
+Do not replay child moves when state already has the
+destination addresses. Review the candidate's parent-ID, output, root provider
+conversion, link-reference and extension-ownership changes against that actual
+state, then independently verify the same-state upgrade before applying it to
+another deployment. The historical v0.1.0-to-v0.2.0 address-only procedure is
+preserved at the end of this guide; it is not the complete candidate migration.
+
+Freeze an exact candidate commit, or a protected immutable full-source snapshot
+and verified manifest when committing is not authorized, before Azure verification.
+Back up state in
+protected storage, retain the backend/workspace, and capture current resource
+IDs, child keys, assignment GUIDs, locks/notes and outputs. Keep the original
+AzureRM, random and modtm provider configurations available for the one-time
+state conversion/removal initialization. Do not indiscriminately discard locks
+or upgrade unrelated dependencies.
+
+## Required configuration changes
+
+- Require Terraform >=1.11.0, <2.0 and Azure/azapi >=2.12, <3.0.
+- Replace root `resource_group_name` with the **same existing resource group's
+  full ARM ID** in `parent_id`. Do not change subscription, resource names,
+  locations, keys, or the association's external PaaS identity during adoption.
+- Direct child consumers replace `network_security_perimeter_resource_id` with
+  `parent_id`; direct access-rule consumers replace `profile_resource_id` with
+  `parent_id`. Associations still accept `profile_resource_id` as a reference,
+  not their lifecycle parent.
+- Child collection outputs are keyed submodule outputs:
+  use `profiles[key].resource_id`, `access_rules[key].resource_id` and
+  `resource_associations[key].resource_id`. Raw provider objects and their
+  `.output`/`.body` attributes are not part of the new contract.
+  `resource` contains only `{ id, name }` (lookup references additionally expose
+  observed `properties`). Root `resource_id` remains unchanged.
+- Review telemetry permissions: managed empty subscription deployments replace
+  released random/modtm telemetry. The old telemetry bindings are forgotten
+  without destruction. Telemetry can be disabled through the existing opt-out;
+  enabled telemetry intentionally causes deployment timestamp writes.
+- The released implementation accepted `role_assignments[*].description` but
+  did not pass it to AzureRM. During adoption, configure the actual existing
+  value (normally null), not a previously ignored non-null input. Setting a new
+  description later is an immutable assignment change requiring a separately
+  approved replacement plan.
+
+## Automatic module-owned moves — no per-key commands
+
+The candidate contains these declarative moves:
+
+| Released address | Candidate address |
+| --- | --- |
+| `azapi_resource.network_security_perimeter` | `azapi_resource.this` |
+| `azurerm_management_lock.this` | `azapi_resource.lock` |
+| `azurerm_role_assignment.this` | `azapi_resource.role_assignments` |
+
+The latter two move **entire collections**, retaining count indices or map keys.
+Do not issue per-key state commands for these standard paths. AzAPI v2.12.0's
+`azapi_resource` MoveState converter accepts AzureRM sources and initializes
+ARM ID, name, parent and type from source state. The original lock name/notes
+defaults are preserved. RBAC uses a narrow name ignore to preserve the adopted
+AzureRM-generated GUID rather than replacing it with a fresh UUID.
+Input-based replacement triggers retain immutable-input behavior; their first
+adoption and subsequent changes still require real plan verification.
+Lock level and notes changes also retain the released replacement behavior.
+
+Generated role-assignment names now use module-owned UUIDs keyed by normalized
+scope, principal and resolved role ID. The new UUID bindings are state-only
+additions; existing utility UUID bindings remain in place. The assignment's
+name ignore preserves an existing GUID on an unchanged upgrade, while an
+intentional principal/role/scope replacement uses a newly generated UUID.
+This applies to primary, child and target assignments. For explicit `name`
+values, the caller must choose a new GUID when changing principal, role or scope.
+Stage ancestor unlock/change/relock as documented below; UUID rotation does not
+unlock an unchanged lock. Link-owned locks now follow remote-target replacement
+of the link at its unchanged ARM ID.
+
+Role-name lookup uses the actual assignment scope after the owned resource
+exists, including the primary NSP. Inherited RG-scoped custom roles remain
+visible, independently of subscription qualification of tenant-level
+role IDs. Defaults now retry `ScopeLocked`, `PrincipalNotFound` and
+`LinkedAuthorizationFailed`; custom `retry.error_message_regex` replaces these
+patterns and `retry = null` restores provider defaults. These are bounded
+replication retries, not permission grants or automatic unlocking.
+
+Composite AzureRM role-assignment state IDs containing `|tenant` are a distinct
+**unverified exception**, not proven by tenant-level role-definition prefix
+normalization. Do not apply a failing converter plan or create replacement
+assignments. Obtain a separately verified scoped forget/import adoption path
+that preserves the original GUID. No generic manual recipe is claimed here.
+
+## Explicit keyed child extraction
+
+v0.1.0 had three root `for_each` resources. Released v0.2.0 extracted them into
+single-instance child modules without moves. Terraform cannot express a
+module-owned wildcard move mapping arbitrary resource keys into module keys.
+Add consumer-root **declarative moved blocks for each actual existing key**,
+using your real nested module path. For example, for
+`module.platform.module.perimeter`:
+
+```hcl
+moved {
+  from = module.platform.module.perimeter.azapi_resource.nsp_profile["profile1"]
+  to   = module.platform.module.perimeter.module.nsp_profile["profile1"].azapi_resource.this
+}
+moved {
+  from = module.platform.module.perimeter.azapi_resource.nsp_access_rule["inbound"]
+  to   = module.platform.module.perimeter.module.nsp_access_rule["inbound"].azapi_resource.this
+}
+moved {
+  from = module.platform.module.perimeter.azapi_resource.nsp_resource_association["storage"]
+  to   = module.platform.module.perimeter.module.nsp_resource_association["storage"].azapi_resource.this
+}
+```
+
+Enumerate actual addresses with `terraform state list`; do not copy example
+keys or move only one instance of a populated collection. These are same-kind
+AzAPI moves, not Azure recreations or imports. Imperative state editing is not
+the standard path. v0.2.0 or main-sourced states **already at these target addresses**
+do not need these moves again. Direct child-module consumers retain their
+existing `azapi_resource.this` addresses.
+
+## v0.2.0 and main-sourced link references
+
+v0.1.0 did not expose links/link references. The 2025-05-01 API supports
+link-reference GET/DELETE but no PUT. The candidate uses a data source;
+the service/link remains lifecycle owner. Existing v0.2.0 or main-sourced child bindings
+are forgotten by the child module's `removed { destroy = false }` block.
+Keep the map entries present during that transition so the child module and
+its removal declaration are evaluated. Do not remove the whole module call
+first or accept a DELETE plan as a migration shortcut. The lookup must find
+the existing counterpart.
+
+## New extension ownership is not automatic migration
+
+The original root moved-block addresses and adopted root assignment GUID
+behavior are unchanged. New child and cross-reference extensions have new
+addresses; they are not silently covered by the old perimeter lock move.
+
+When upgrading a locked v0.1.0 deployment, associated PaaS targets now inherit
+the perimeter lock by default. Explicitly review every referenced target before
+applying. If its lock belongs to another state, set
+`private_link_resource_extensions.lock_inheritance_enabled = false`; similarly
+opt out remote perimeters through `remote_perimeter_extensions`.
+This prevents duplicate ownership and preserves external extension intent.
+Target configuration/tags/lifecycle remain external regardless of lock choice.
+
+Leave new `role_assignments` maps empty unless permissions were explicitly
+requested. To deliberately adopt an existing extension, freeze its previous
+writer, preserve the exact scope/name/GUID and canonical body, and use a
+consumer-root import at its actual nested address. For example:
+
+```hcl
+import {
+  to = module.platform.module.perimeter.module.nsp_resource_association["storage"].azapi_resource.target_lock[0]
+  id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/example/providers/Microsoft.Storage/storageAccounts/example/providers/Microsoft.Authorization/locks/existing-lock"
+}
+```
+
+This is an **untested deliberate-adoption exception**, not a required command
+for every upgrade. Configure the matching target lock name before import.
+Do not import an absent object; do not remove bindings from another state until
+the handoff is approved and both owner plans have been inspected.
+
+### Working-candidate architecture correction (not a released upgrade hop)
+
+The removed `modules/resource_extensions` wrapper was part of a never-applied,
+unreleased local candidate. Each actual child now owns direct
+`azapi_resource.lock[0]` and `azapi_resource.role_assignments[key]` bindings.
+Associations, links and references use separate `azapi_resource.target_lock[0]`
+and `azapi_resource.target_role_assignments[key]` bindings for external targets.
+The pure interfaces utility remains at 0.10.0; it does not own these resources.
+
+For comparison only, former candidate addresses under `module.ext` would now
+be direct child addresses; former `module.target_ext` (or `[0]`) addresses would
+now use the direct `target_` resource labels. No helper state moves are added:
+that local candidate was never applied, and deleting it does not require new
+migration steps for released v0.1.0 consumers. The released moves, keyed child
+extraction exception and reference forget path above are unchanged.
+An independently applied experimental wrapper fork is not an advertised upgrade
+baseline and requires its own separately reviewed state plan.
+
+Candidate-only control objects are corrected too: under each actual child's
+ARM-type slot, use direct `authorization_locks` and
+`authorization_role_assignments` fields, not nested helper-shaped objects.
+`resource_types` also has direct `authorization_role_definitions`.
+Children own stable defaults. Same ARM-kind resources share the override and
+ignore list uniformly across their distinct child and target blocks, without
+additional per-item precedence. Retry/timeouts continue to cascade unchanged.
+
+Each collection item supports its own `lock`/`role_assignments`. A lookup-only
+reference can own extension resources without owning the reference. If remote
+extensions are requested for a reference, supply its non-null
+`remote_perimeter_resource_id`, matching the GET response. Remote IDs may remain
+unknown at plan time when passed from another module's `resource_id`; keep
+extension presence, assignment keys and role selectors plan-known. Terraform
+preserves creation ordering and can create the remote perimeter and initiating
+link in one apply, without separately deploying the remote first. GET-only
+references still need a dependency on their producing link when it is also new.
+The `child`/`target` keys and managed extension addresses are unchanged; no new
+state move or import is required by this composition correction. Its unknown-ID
+coverage is provider-mocked plan regression evidence, not live Azure proof.
+Manual links without
+a remote ARM ID require remote lock opt-out and empty remote RBAC.
+
+Before selective replacement, ReadOnly-protected updates, or descendant
+teardown under profile locks, perform a separately approved lock-removal apply,
+verify propagation, apply the inspected change, then restore locks separately.
+Remove ancestor profile locks first even for full module destroy; profile locks
+cannot wait on their root-owned descendant modules without a graph cycle.
+Apply ReadOnly profile locks after descendants exist. Bounded ScopeLocked retry
+is not an unlock mechanism or Azure propagation proof.
+
+## Required verification before use
+
+### Association immutable-target replacement
+
+Keep the existing `private_link_resource_id` unchanged during adoption.
+Subsequent target changes now require delete-before-create of the association:
+Azure rejects an in-place PUT to a different PaaS target. Its ARM ID can remain
+the same after replacement. Inspect saved-plan actions and replacement paths,
+not only IDs. No create-before-destroy or consumer unbind/state edits are needed.
+Profile/access-mode edits with a constant target remain in-place.
+
+Owned association-scope locks and Readers are replaced with the association,
+including an explicitly configured Reader GUID. Explicitly owned target
+extensions move from the old to the new target through their changed scope;
+unconfigured or externally owned extensions and both targets remain untouched.
+Before selective replacement, stage removal of any applicable ancestor lock
+as described above. An unchanged ancestor lock is not an automatic unlock.
+
+### Link/profile ordering
+
+Module-managed links now consume matching local profile resource names rather
+than only input strings. This orders profile creation before link creation and
+link deletion before local profile deletion, without depending on profile
+extensions or deferring link role-definition lookups. The input remains a list
+of names, not profile map keys; externally managed names and `*` pass through.
+No ARM identity, role assignment GUID or interface changes are intended.
+
+Remote profiles are owned outside this module's local profile collection.
+Consumers must wire the actual link owner to remote profile resource outputs
+(or an appropriately scoped explicit dependency), including destruction order.
+A GET-only `link_references` lookup does not own or delete the relationship and
+cannot substitute for that dependency. Standalone link submodule consumers must
+likewise supply dependencies on their profile owners. Existing staged ancestor
+lock-removal requirements still apply; this change does not unlock resources.
+
+1. Successfully apply the pinned released baseline in an approved isolated
+   fixture, then inspect its refreshed plan and capture protected state/readbacks.
+2. Switch the **same state** to an immutable candidate, make only the changes
+   above, and initialize. For local module sources remove registry `version`.
+3. Save a plan and inspect its JSON. Require explained moves/forgets and no
+   unintended deletion, replacement, duplicate assignment or lost association.
+   Never apply a destructive plan merely to complete the refactor.
+4. Apply only that inspected plan under separate Azure authorization. Compare
+   independent Azure IDs, GUIDs, lock names/notes, properties and relationships.
+5. Require normal refreshed convergence; for risky lists/normalization require
+   two no-op infrastructure plans. Classify only the exact telemetry timestamp
+   deployment writes, not arbitrary drift.
+6. Separately test list add/subset removal/final clear/restore/reorder/retarget,
+   external drift, parent metadata writes preserving children, telemetry
+   enabled/disabled, full teardown, parent replacement and selective child/RBAC
+   replacement under unchanged locks. ReadOnly is a separate case.
+7. Verify approved cleanup and empty test state. Failed destroy is not a pass;
+   broad resource-group deletion is not an implicit fallback.
+
+Fresh E2E and independent released-state upgrade verification are separate gates.
+The bounded verification above does not authorize changes to another deployment
+or establish release readiness without the remaining review and validation gates.
+Examples are fresh-deployment configurations; their scaffold changes are not an
+automatic upgrade path for previously applied example state.
+
+## Rollback limitations
+
+A source revert does not reverse provider state conversion or extraction.
+State backups do not reverse Azure mutations. After migration, a rollback needs
+its own inspected state/configuration recovery plan; none is proven here.
+Do not restore old state blindly or accept destruction to match old addresses.
+## Historical v0.1.0-to-v0.2.0 address-only procedure
+
+**v0.2.0 is a published breaking release, not a backwards-compatible patch.**
+The following historical procedure targets that release only, not this
+candidate. Prefer the consumer-root declarative moves above for a direct
+v0.1.0-to-candidate migration; do not combine the two procedures or replay moves.
 
 Existing profiles, access rules, and resource associations need explicit, per-key state-address moves. Do not apply a plan that destroys and recreates these Azure resources. Empty collections need no moves; new deployments have no old state to migrate.
 
-The address procedure was checked with Terraform **1.17.2**, PowerShell **7.4+**, and disposable synthetic local state only. It has **not** been tested against a deployed 0.1.0 environment, real provider state, a remote backend, or Azure. Local address checks do not prove an Azure upgrade plan is safe. Have the state owner review the procedure and the actual consumer plan before proceeding.
+This historical address-only procedure was checked with Terraform **1.17.2**,
+PowerShell **7.4+**, and disposable synthetic local state only, not against a
+deployed v0.1.0 environment, real provider state, a remote backend, or Azure.
+That qualification applies to this procedure, not to the separate bounded
+v0.1.0-to-candidate verification described above. Local address checks do not
+prove an Azure upgrade plan is safe. Have the state owner review the procedure
+and the actual consumer plan before proceeding.
 
-## What changes
+### What changes in v0.2.0
 
 For each existing map key, use these addresses **relative to the module instance**:
 
@@ -30,7 +371,7 @@ The intended Azure IDs remain `<NSP_ID>/profiles/<profile-name>`, `<NSP_ID>/prof
 
 There is no reusable wildcard or `for_each` `moved` block for this layout: the old resource-instance key becomes a module-instance key. Move each known instance explicitly; do not move an entire collection to an unkeyed module.
 
-## 1. Freeze changes and back up the correct state
+### 1. Freeze changes and back up the correct state
 
 Arrange an exclusive maintenance window. Pause automated plans/applies and other state writers until the configuration and state agree again. Confirm the backend, workspace, caller prefix, and provider bindings. Do not rename keys, change inputs, or change credentials as part of this procedure.
 
@@ -62,7 +403,7 @@ $null = ($original -join "`n") | ConvertFrom-Json
 
 Verify and securely retain the backup, its lineage/serial, and the original configuration and dependency lock file. State files and automatic `.backup` files can contain secrets: restrict access and do not commit, publish, or paste them into issues. Do not overwrite the original backup. A backup is not permission to overwrite newer operational state.
 
-## 2. Inventory and declare every exact pair
+### 2. Inventory and declare every exact pair
 
 Rehearse in the newly created review directory, with no `.tf` files, `.terraform` directory, backend initialization, or remote-state configuration. **Do not run `terraform init` here.** Explicit `-state` flags are local-backend options; they are not a safety boundary inside a directory configured for a remote backend.
 
@@ -110,7 +451,7 @@ $escapedProfile = @{
 
 Replace the corresponding entry with that pair; do not add a second entry for the same source or destination. Standard PowerShell native argument passing preserves the embedded quotes; do not add the extra quote escaping used by older Windows PowerShell examples.
 
-## 3. Rehearse on the disposable local copy
+### 3. Rehearse on the disposable local copy
 
 Preflight **all** pairs before changing the candidate. A missing source or occupied destination is an error, including on a rerun; never silently skip it.
 
@@ -147,7 +488,7 @@ If anything fails, stop. For a failed local rehearsal, retain the evidence and s
 
 `state mv` is not an idempotent command: a second invocation after success must fail because the source is gone. The preflight deliberately rejects a full rerun before any move. If resuming a partial operational migration later, inventory the current state and reconcile **each** already-moved pair against its original ID, type, provider binding, attributes, and key before a state owner explicitly approves a remaining-pairs list. Both endpoints present, neither present, or an unexpected destination object means stop, not skip or remove.
 
-## 4. Operational handoff, only after independent approval
+### 4. Operational handoff, only after independent approval
 
 Everything above can be rehearsed on copies. The following phase is a **separate, state-changing consumer maintenance operation**, not part of the offline verification.
 
@@ -181,7 +522,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Plan review failed. Stop.' }
 
 Require **zero unintended creates, deletes, or replacements** of the existing perimeter, profiles, rules, and associations, with all reviewed Azure IDs preserved. Stop on any unexpected infrastructure update too. Do not use `-target`, `-refresh=false`, or a blanket ignore to conceal a bad plan. No apply is authorized by this guide; only an independently approved saved plan may be applied through your normal process. Review a subsequent full plan afterward.
 
-## Breaking output and runtime changes
+### v0.2.0 breaking output and runtime changes
 
 The state moves do **not** restore the 0.1.0 output contract:
 

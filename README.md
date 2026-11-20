@@ -15,7 +15,8 @@ The module supports:
 - Creating inbound and outbound access rules (address prefixes, FQDNs, subscriptions, service tags)
 - Associating PaaS resources with the perimeter via resource associations
 - Configuring access modes for resource associations (`Learning`, `Enforced`, `Audit`)
-- Role assignments on the perimeter resource
+- Explicit role assignments on the perimeter, profiles, rules, associations,
+  links, existing link references, referenced PaaS targets and remote perimeters
 - Resource locks
 - Tagging
 
@@ -35,7 +36,7 @@ module "network_security_perimeter" {
 
   location            = "eastus2"
   name                = "nsp-demo-eastus2-001"
-  resource_group_name = "rg-demo-eastus2-001"
+  parent_id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-demo-eastus2-001"
 
   profiles = {
     profile1 = {
@@ -60,32 +61,185 @@ module "network_security_perimeter" {
 }
 ```
 
-## Upgrading from 0.1.0
+## Compatibility and operational limits
 
-The planned **0.2.0 is a breaking release**: existing profiles, access rules, and resource associations change Terraform addresses, and root output shapes change. Follow the [upgrade guide](UPGRADE.md) to review and rehearse every existing resource-instance move before changing operational state or applying the upgrade. A version bump alone does not preserve state.
+This candidate is an unreleased breaking refactor. Read
+[the upgrade guide](UPGRADE.md) for version-specific state moves, bounded Azure
+verification and unverified paths before changing an existing deployment.
+Terraform >=1.11.0 and AzAPI >=2.12, <3.0 are required.
+
+Writable children remain independently consumable, single-instance submodules;
+the parent owns map cardinality. `parent_id` replaces scope-name inputs.
+Link references are **lookup-only**, never created or deleted by this module.
+`resource` outputs expose stable identity objects, not raw provider objects.
+`resource_id` is the canonical identity output.
+
+Per-resource `resource_types` and `ignore_body_changes` plus shared `retry` and
+`timeouts` cascade to writable children. Ignore paths use body-relative dot
+notation; ignored configuration is not sent to Azure, and changes take effect
+only after apply. Do not ignore owned collections to conceal drift.
+
+Role names resolve case-insensitively at the assignment scope. Lookups and
+extension writes on owned resources depend on those resources being created;
+referenced targets retain their supplied resource dependencies. Custom roles
+inherited from the resource group remain visible. Role-ID subscription
+qualification is separate from lookup scope.
+With AzAPI there is no Microsoft Graph pre-check: setting
+`skip_service_principal_aad_check = true` supplies `principalType = ServicePrincipal`
+when no explicit principal type was given. Adopted assignment GUIDs are retained.
+Generated assignment UUIDs rotate when the principal, resolved role or scope
+changes, including target RBAC during association retargeting. Existing assignment
+names are retained on unchanged upgrades; additional UUID resources are state-only.
+A changed explicit `name` also triggers replacement. If you supply an explicit
+GUID, supply a new GUID when changing principal, role or scope.
+Default retry patterns include `PrincipalNotFound` and `LinkedAuthorizationFailed`
+for RBAC replication, as well as `ScopeLocked`; retries do not grant permissions.
+Override `retry.error_message_regex` to replace the patterns or set `retry = null`
+for provider defaults.
+
+Locks are ordered after writable children and assignments. Default retries cover
+`ScopeLocked` propagation errors; they do not unlock an unchanged lock.
+Selective deletion/replacement may require staged unlock/change/relock, and
+ReadOnly locks may block PUTs. Obtain separate operational approval before
+removing a lock or performing any destructive operation.
+
+Telemetry is enabled by default and creates an empty incremental deployment at
+the active subscription scope (including instrumented child modules).
+The identity needs deployment read/write/delete permissions there.
+Set `enable_telemetry = false` to disable it throughout the module graph.
+The telemetry `plantimestamp()` update is intentional; it is not a blanket
+exception for infrastructure drift.
+
+Provider-mocked tests do not prove Azure persistence, collection removal,
+identity preservation, released-state upgrades, or lock teardown.
+
+## Extension ownership and inheritance
+
+Each root collection item accepts canonical `lock` and `role_assignments`
+inputs. Extensions live inside that item's submodule, including when consumed
+standalone. Child locks default to absent; the perimeter lock already protects
+its descendant scopes. Child RBAC defaults to `{}` and is never automatically
+granted.
+
+`resource_associations[*].private_link_resource_extensions` and
+`links[*].remote_perimeter_extensions` configure extensions on referenced
+targets. Link references use `remote_perimeter_resource_id` together with
+`remote_perimeter_extensions`; the supplied ID is checked against the reference's
+GET response before remote writes. The reference itself remains lookup-only,
+even if this module manages extensions at its scope.
+
+Remote perimeter IDs can be passed directly from another module's `resource_id`
+while unknown at plan time. Keep collection/assignment keys, extension presence
+and role selectors plan-known. Terraform retains the real resource dependency:
+the remote perimeter and the initiating link can be created in a single apply;
+no separate remote deployment, precomputed ID or targeted apply is required.
+Remote-target input checks that need those IDs run once they resolve, before
+extension writes. GET-only references still require their service-created object
+to exist; when composing its producing link in the same apply, carry that link's
+output dependency through the relevant reference input.
+
+For each target, `lock_inheritance_enabled` defaults to `true`. An explicit
+target `lock` replaces the perimeter lock configuration; a null/omitted target
+lock inherits it. Setting `lock_inheritance_enabled = false` disables that
+target lock **even when an override is supplied**. Target RBAC is created only
+from its explicitly supplied `role_assignments`. Standalone association/link/
+reference modules inherit their own `lock` instead of a root perimeter lock.
+Manual links with no remote ARM ID cannot manage remote extensions: disable
+remote lock inheritance and leave remote RBAC empty.
+
+The module never writes referenced target configuration or tags and never
+deletes the PaaS resource or remote perimeter. Deleting an association/link/
+reference module call does delete **extensions owned by that call**; a GET-only
+reference remains untouched. Removing an extension while keeping its target
+does not transfer target lifecycle ownership.
+
+Consumers must coordinate extension ownership across repeated references,
+collection paths and Terraform states. Disable lock inheritance on paths that
+do not own the target lock. The module does not perform duplicate-assignment
+or GUID-uniqueness checks; Azure enforces its role-assignment constraints.
+A PaaS target can have only one association owner in this perimeter.
+
+Existing externally owned locks require opt-out. Existing assignments require
+empty RBAC inputs or deliberate state adoption preserving their GUIDs.
+AzAPI's create-time existence check rejects an existing ARM object; no automatic
+import is introduced for new extensions. Preserve keys after deliberate imports.
+Only the legacy root assignments retain the migration-specific name ignore.
+
+Extension controls are in each child's `resource_types` and
+`ignore_body_changes` slots, directly under that child's ARM-type key.
+Each child directly declares its locks and RBAC, using
+`Azure/avm-utl-interfaces/azure` 0.10.0 for canonical configuration.
+Each type slot contains direct `authorization_locks`,
+`authorization_role_assignments` and read-only `authorization_role_definitions`
+fields. Each ignore slot contains direct `authorization_locks` and
+`authorization_role_assignments` path lists. Owning children define their tested
+stable API defaults; parent string overrides have no repeated defaults.
+Same ARM-kind resources share a field uniformly within the child, including
+distinct child-scoped and target-scoped resource blocks. There are no additional
+per-item controls or precedence layers; resource bodies and scope ownership
+remain separate.
+Shared retry/timeouts pass through to every managed extension, not to unsupported
+GET-only data-source arguments. Role names are resolved at their assignment
+scope, including custom roles inherited from a resource group.
+
+Referenced PaaS IDs are polymorphic: different Private Link-capable ARM types
+are supported. They are deliberately not validated against a single resource
+type (TFNFR38 exception); the consumer supplies the actual fully-qualified ID.
+
+## Lock staging requirements
+
+Root locks follow children/extensions; each child lock follows its own resource
+and RBAC. This does **not** temporarily unlock unchanged locks. Before selective
+deletion, immutable replacement, RBAC changes under ReadOnly, or ancestor-profile
+descendant teardown:
+
+1. Obtain operational approval and apply removal of **all** applicable owned
+   locks (root `lock = null`, affected child `lock = null`, and referenced-target
+   `lock_inheritance_enabled = false` as needed). Do not simultaneously change
+   protected identities, remove the child module, or alter assignments.
+2. Verify removal and wait for Azure propagation, then apply the inspected
+   resource/assignment change.
+3. Restore the intended locks in a separate apply and verify convergence.
+
+In particular, profile locks protect independently managed root access-rule
+modules. Waiting on those modules from inside their parent profile would create
+a Terraform graph cycle. Remove profile locks in a separate apply before
+descendant teardown **including full module destroy**. Apply ReadOnly profile
+locks only after descendant creation. This staged contract also applies to
+standalone profiles whose descendants another configuration manages.
+Do not infer automatic locked teardown or propagation proof from mocked tests.
+## Upgrading existing deployments
+
+Released **v0.2.0 introduced breaking child addresses and output shapes** relative
+to v0.1.0; this candidate introduces further interface and ownership changes.
+Follow the [upgrade guide](UPGRADE.md) for your exact starting version.
+Do not replay already-completed moves. A version bump alone does not preserve
+state, and the bounded v0.1.0-to-candidate proof does not verify the
+v0.2.0-to-candidate path.
 
 <!-- markdownlint-disable MD033 -->
 ## Requirements
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.9, < 2.0)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.11.0, < 2.0.0)
 
 - <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
 
-- <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.0)
+- <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.6)
 
 ## Resources
 
 The following resources are used by this module:
 
-- [azapi_resource.network_security_perimeter](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.lock](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.role_assignments](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
-- [azurerm_management_lock.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/management_lock) (resource)
-- [azurerm_role_assignment.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) (resource)
+- [azapi_resource.this](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [random_uuid.role_assignment_name](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/uuid) (resource)
 - [terraform_data.telemetry](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
-- [azapi_client_config.current](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
 - [azapi_client_config.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
+- [azapi_resource_list.role_definitions](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/resource_list) (data source)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs
@@ -104,9 +258,9 @@ Description: The name of the Network Security Perimeter. Must be 1-80 characters
 
 Type: `string`
 
-### <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name)
+### <a name="input_parent_id"></a> [parent\_id](#input\_parent\_id)
 
-Description: The resource group where the resources will be deployed.
+Description: The fully-qualified ARM resource ID of the existing resource group. This module does not create its parent scope.
 
 Type: `string`
 
@@ -127,6 +281,8 @@ Description: A map of NSP access rules to create. The map key is deliberately ar
 - `phone_numbers` - (Optional) List of outbound phone numbers. Currently unavailable for use.
 - `service_tags` - (Optional) List of inbound service tag names. Currently unavailable for use.
 - `subscriptions` - (Optional) List of subscription IDs (ARM format: `/subscriptions/{id}`) for cross-subscription inbound access.
+- `lock` - (Optional) Canonical kind/name/notes lock on this access-rule scope; defaults absent.
+- `role_assignments` - (Optional) Canonical RBAC name, role\_definition\_id\_or\_name, principal\_id, description, skip\_service\_principal\_aad\_check, condition, condition\_version, delegated\_managed\_identity\_resource\_id and principal\_type fields. Defaults empty; assignments are owned inside the access-rule module.
 
 Type:
 
@@ -141,6 +297,22 @@ map(object({
     phone_numbers                = optional(list(string), [])
     service_tags                 = optional(list(string), [])
     subscriptions                = optional(list(string), [])
+    lock = optional(object({
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
+    }))
+    role_assignments = optional(map(object({
+      name                                   = optional(string, null)
+      role_definition_id_or_name             = string
+      principal_id                           = string
+      description                            = optional(string, null)
+      skip_service_principal_aad_check       = optional(bool, false)
+      condition                              = optional(string, null)
+      condition_version                      = optional(string, null)
+      delegated_managed_identity_resource_id = optional(string, null)
+      principal_type                         = optional(string, null)
+    })), {})
   }))
 ```
 
@@ -156,17 +328,106 @@ Type: `bool`
 
 Default: `true`
 
+### <a name="input_ignore_body_changes"></a> [ignore\_body\_changes](#input\_ignore\_body\_changes)
+
+Description: Body-relative dot-notation paths to ignore. Individual list indices are unsupported. Ignored configuration is not sent to Azure until the path is removed. Changes take effect only after apply; removing a path can require a subsequent plan.
+
+- `network_network_security_perimeters` - Perimeter paths.
+- `authorization_locks` - Lock paths.
+- `authorization_role_assignments` - Role assignment paths.
+- `network_network_security_perimeters_profiles.network_network_security_perimeters_profiles` - Profile paths.
+- `network_network_security_perimeters_profiles_access_rules.network_network_security_perimeters_profiles_access_rules` - Access rule paths.
+- `network_network_security_perimeters_resource_associations.network_network_security_perimeters_resource_associations` - Association paths.
+- `network_network_security_perimeters_links.network_network_security_perimeters_links` - Link paths.
+- `network_network_security_perimeters_link_references` - GET-only references have no own-body ignore argument.
+- Each child slot contains direct `authorization_locks` and `authorization_role_assignments` path lists for the resources owned by that child. Association, link and reference children apply each ARM-kind list uniformly to their distinct child and target resources. No root-body paths are reused for children.
+
+Type:
+
+```hcl
+object({
+    network_network_security_perimeters = optional(list(string), [])
+    authorization_locks                 = optional(list(string), [])
+    authorization_role_assignments      = optional(list(string), [])
+    network_network_security_perimeters_profiles = optional(object({
+      network_network_security_perimeters_profiles = optional(list(string), [])
+      authorization_locks                          = optional(list(string), [])
+      authorization_role_assignments               = optional(list(string), [])
+    }), {})
+    network_network_security_perimeters_profiles_access_rules = optional(object({
+      network_network_security_perimeters_profiles_access_rules = optional(list(string), [])
+      authorization_locks                                       = optional(list(string), [])
+      authorization_role_assignments                            = optional(list(string), [])
+    }), {})
+    network_network_security_perimeters_resource_associations = optional(object({
+      network_network_security_perimeters_resource_associations = optional(list(string), [])
+      authorization_locks                                       = optional(list(string), [])
+      authorization_role_assignments                            = optional(list(string), [])
+    }), {})
+    network_network_security_perimeters_links = optional(object({
+      network_network_security_perimeters_links = optional(list(string), [])
+      authorization_locks                       = optional(list(string), [])
+      authorization_role_assignments            = optional(list(string), [])
+    }), {})
+    network_network_security_perimeters_link_references = optional(object({
+      authorization_locks            = optional(list(string), [])
+      authorization_role_assignments = optional(list(string), [])
+    }), {})
+  })
+```
+
+Default: `{}`
+
 ### <a name="input_link_references"></a> [link\_references](#input\_link\_references)
 
-Description: A map of NSP link references to manage. Link references are automatically created on the remote NSP when an NSP link is established. All properties are read-only in the current API version. The map key is deliberately arbitrary.
+Description: A map of existing NSP link references to look up, not create or delete. Link references are automatically created on the remote NSP when an NSP link is established. The pinned API exposes GET/DELETE but no PUT lifecycle. The map key is deliberately arbitrary.
 
 - `name` - (Required) The name of the link reference.
+- `lock` and `role_assignments` - Optional canonical reference-scope extensions; never reference lifecycle ownership.
+- `remote_perimeter_resource_id` - Known remote NSP ARM ID; checked against GET before remote extension writes.
+- `remote_perimeter_extensions` - Target-scoped canonical lock/RBAC settings. lock\_inheritance\_enabled defaults true; false overrides every lock. Omitted target lock inherits the primary perimeter lock; explicit target lock replaces it. RBAC defaults empty.
 
 Type:
 
 ```hcl
 map(object({
-    name = string
+    name                         = string
+    remote_perimeter_resource_id = optional(string)
+    lock = optional(object({
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
+    }))
+    role_assignments = optional(map(object({
+      name                                   = optional(string, null)
+      role_definition_id_or_name             = string
+      principal_id                           = string
+      description                            = optional(string, null)
+      skip_service_principal_aad_check       = optional(bool, false)
+      condition                              = optional(string, null)
+      condition_version                      = optional(string, null)
+      delegated_managed_identity_resource_id = optional(string, null)
+      principal_type                         = optional(string, null)
+    })), {})
+    remote_perimeter_extensions = optional(object({
+      lock_inheritance_enabled = optional(bool, true)
+      lock = optional(object({
+        kind  = string
+        name  = optional(string, null)
+        notes = optional(string, null)
+      }))
+      role_assignments = optional(map(object({
+        name                                   = optional(string, null)
+        role_definition_id_or_name             = string
+        principal_id                           = string
+        description                            = optional(string, null)
+        skip_service_principal_aad_check       = optional(bool, false)
+        condition                              = optional(string, null)
+        condition_version                      = optional(string, null)
+        delegated_managed_identity_resource_id = optional(string, null)
+        principal_type                         = optional(string, null)
+      })), {})
+    }), {})
   }))
 ```
 
@@ -181,6 +442,8 @@ Description: A map of NSP links to create. Links connect two Network Security Pe
 - `description` - (Optional) A message passed to the owner of the remote NSP link resource to request approval.
 - `local_inbound_profiles` - (Optional) List of local inbound profile names to which inbound traffic is allowed. Use `['*']` to allow inbound to all profiles.
 - `remote_inbound_profiles` - (Optional) List of remote inbound profile names to which inbound traffic is allowed on the remote NSP.
+- `lock` and `role_assignments` - Optional canonical link-scope extensions; defaults null and empty.
+- `remote_perimeter_extensions` - Target-scoped canonical lock/RBAC settings. lock\_inheritance\_enabled defaults true; false overrides every lock. Omitted target lock inherits the primary perimeter lock; explicit target lock replaces it. RBAC defaults empty. No remote target lifecycle or tags are owned.
 
 Type:
 
@@ -191,6 +454,41 @@ map(object({
     description                                = optional(string)
     local_inbound_profiles                     = optional(list(string), [])
     remote_inbound_profiles                    = optional(list(string), [])
+    lock = optional(object({
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
+    }))
+    role_assignments = optional(map(object({
+      name                                   = optional(string, null)
+      role_definition_id_or_name             = string
+      principal_id                           = string
+      description                            = optional(string, null)
+      skip_service_principal_aad_check       = optional(bool, false)
+      condition                              = optional(string, null)
+      condition_version                      = optional(string, null)
+      delegated_managed_identity_resource_id = optional(string, null)
+      principal_type                         = optional(string, null)
+    })), {})
+    remote_perimeter_extensions = optional(object({
+      lock_inheritance_enabled = optional(bool, true)
+      lock = optional(object({
+        kind  = string
+        name  = optional(string, null)
+        notes = optional(string, null)
+      }))
+      role_assignments = optional(map(object({
+        name                                   = optional(string, null)
+        role_definition_id_or_name             = string
+        principal_id                           = string
+        description                            = optional(string, null)
+        skip_service_principal_aad_check       = optional(bool, false)
+        condition                              = optional(string, null)
+        condition_version                      = optional(string, null)
+        delegated_managed_identity_resource_id = optional(string, null)
+        principal_type                         = optional(string, null)
+      })), {})
+    }), {})
   }))
 ```
 
@@ -202,13 +500,15 @@ Description: Controls the Resource Lock configuration for this resource. The fol
 
 - `kind` - (Required) The type of lock. Possible values are `\"CanNotDelete\"` and `\"ReadOnly\"`.
 - `name` - (Optional) The name of the lock. If not specified, a name will be generated based on the `kind` value. Changing this forces the creation of a new resource.
+- `notes` - (Optional) Notes about the lock. This value maps to `Microsoft.Authorization/locks.properties.notes`.
 
 Type:
 
 ```hcl
 object({
-    kind = string
-    name = optional(string, null)
+    kind  = string
+    name  = optional(string, null)
+    notes = optional(string, null)
   })
 ```
 
@@ -219,12 +519,29 @@ Default: `null`
 Description: A map of NSP profiles to create under the Network Security Perimeter. The map key is deliberately arbitrary to avoid issues where map keys may be unknown at plan time.
 
 - `name` - (Required) The name of the profile. Must follow NSP naming constraints (1-80 chars, alphanumeric with `_`, `.`, `-`).
+- `lock` and `role_assignments` - Optional canonical profile-scope extensions owned inside the profile submodule; defaults null and empty. Profile locks must be removed in a staged apply before descendant teardown; ReadOnly profile locks must be applied after descendants exist.
 
 Type:
 
 ```hcl
 map(object({
     name = string
+    lock = optional(object({
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
+    }))
+    role_assignments = optional(map(object({
+      name                                   = optional(string, null)
+      role_definition_id_or_name             = string
+      principal_id                           = string
+      description                            = optional(string, null)
+      skip_service_principal_aad_check       = optional(bool, false)
+      condition                              = optional(string, null)
+      condition_version                      = optional(string, null)
+      delegated_managed_identity_resource_id = optional(string, null)
+      principal_type                         = optional(string, null)
+    })), {})
   }))
 ```
 
@@ -238,6 +555,8 @@ Description: A map of NSP resource associations to link PaaS resources to the Ne
 - `private_link_resource_id` - (Required) The ARM resource ID of the PaaS resource to associate (must support Private Link).
 - `profile_key` - (Required) The key from `var.profiles` that identifies the NSP profile to assign to this association.
 - `access_mode` - (Optional) Access mode for the association. Possible values: `Learning`, `Enforced`, `Audit`. Defaults to `Learning`.
+- `lock` and `role_assignments` - Optional canonical association-scope extensions; defaults null and empty.
+- `private_link_resource_extensions` - Target-scoped canonical lock/RBAC settings. lock\_inheritance\_enabled defaults true; false overrides every lock. Omitted target lock inherits the primary perimeter lock; explicit target lock replaces it. RBAC defaults empty. PaaS configuration/tags/lifecycle remain externally owned.
 
 Type:
 
@@ -247,23 +566,137 @@ map(object({
     private_link_resource_id = string
     profile_key              = string
     access_mode              = optional(string, "Learning")
+    lock = optional(object({
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
+    }))
+    role_assignments = optional(map(object({
+      name                                   = optional(string, null)
+      role_definition_id_or_name             = string
+      principal_id                           = string
+      description                            = optional(string, null)
+      skip_service_principal_aad_check       = optional(bool, false)
+      condition                              = optional(string, null)
+      condition_version                      = optional(string, null)
+      delegated_managed_identity_resource_id = optional(string, null)
+      principal_type                         = optional(string, null)
+    })), {})
+    private_link_resource_extensions = optional(object({
+      lock_inheritance_enabled = optional(bool, true)
+      lock = optional(object({
+        kind  = string
+        name  = optional(string, null)
+        notes = optional(string, null)
+      }))
+      role_assignments = optional(map(object({
+        name                                   = optional(string, null)
+        role_definition_id_or_name             = string
+        principal_id                           = string
+        description                            = optional(string, null)
+        skip_service_principal_aad_check       = optional(bool, false)
+        condition                              = optional(string, null)
+        condition_version                      = optional(string, null)
+        delegated_managed_identity_resource_id = optional(string, null)
+        principal_type                         = optional(string, null)
+      })), {})
+    }), {})
   }))
+```
+
+Default: `{}`
+
+### <a name="input_resource_types"></a> [resource\_types](#input\_resource\_types)
+
+Description: AzAPI resource types and API versions. Defaults belong to the owning module.
+
+- `network_network_security_perimeters` - Perimeter resource.
+- `authorization_locks` - Management lock.
+- `authorization_role_assignments` - Perimeter role assignments.
+- `authorization_role_definitions` - Role definition lookup.
+- `network_network_security_perimeters_profiles.network_network_security_perimeters_profiles` - Profile submodule override.
+- `network_network_security_perimeters_profiles_access_rules.network_network_security_perimeters_profiles_access_rules` - Access rule submodule override.
+- `network_network_security_perimeters_resource_associations.network_network_security_perimeters_resource_associations` - Association submodule override.
+- `network_network_security_perimeters_links.network_network_security_perimeters_links` - Link submodule override.
+- `network_network_security_perimeters_link_references.network_network_security_perimeters_link_references` - Link-reference GET API override.
+- Each child slot contains direct `authorization_locks`, `authorization_role_assignments`, and `authorization_role_definitions` overrides for that child's extension resources and lookups. Same ARM-kind resources share a uniform override within the child, including its target resources. Children own the stable tested defaults; root slots do not repeat them.
+
+Type:
+
+```hcl
+object({
+    network_network_security_perimeters = optional(string, "Microsoft.Network/networkSecurityPerimeters@2025-05-01")
+    authorization_locks                 = optional(string, "Microsoft.Authorization/locks@2020-05-01")
+    authorization_role_assignments      = optional(string, "Microsoft.Authorization/roleAssignments@2022-04-01")
+    authorization_role_definitions      = optional(string, "Microsoft.Authorization/roleDefinitions@2022-04-01")
+    network_network_security_perimeters_profiles = optional(object({
+      network_network_security_perimeters_profiles = optional(string)
+      authorization_locks                          = optional(string)
+      authorization_role_assignments               = optional(string)
+      authorization_role_definitions               = optional(string)
+    }), {})
+    network_network_security_perimeters_profiles_access_rules = optional(object({
+      network_network_security_perimeters_profiles_access_rules = optional(string)
+      authorization_locks                                       = optional(string)
+      authorization_role_assignments                            = optional(string)
+      authorization_role_definitions                            = optional(string)
+    }), {})
+    network_network_security_perimeters_resource_associations = optional(object({
+      network_network_security_perimeters_resource_associations = optional(string)
+      authorization_locks                                       = optional(string)
+      authorization_role_assignments                            = optional(string)
+      authorization_role_definitions                            = optional(string)
+    }), {})
+    network_network_security_perimeters_links = optional(object({
+      network_network_security_perimeters_links = optional(string)
+      authorization_locks                       = optional(string)
+      authorization_role_assignments            = optional(string)
+      authorization_role_definitions            = optional(string)
+    }), {})
+    network_network_security_perimeters_link_references = optional(object({
+      network_network_security_perimeters_link_references = optional(string)
+      authorization_locks                                 = optional(string)
+      authorization_role_assignments                      = optional(string)
+      authorization_role_definitions                      = optional(string)
+    }), {})
+  })
+```
+
+Default: `{}`
+
+### <a name="input_retry"></a> [retry](#input\_retry)
+
+Description: Retry configuration for supported AzAPI resources and child modules. Defaults retry ScopeLocked during lock-removal propagation and RBAC PrincipalNotFound/LinkedAuthorizationFailed replication errors. This does not unlock resources during updates or grant missing permissions. Override error\_message\_regex to replace these patterns, or set null to use provider defaults.
+
+- `error_message_regex` - Retryable error patterns.
+- `interval_seconds` - Initial retry interval in seconds.
+- `max_interval_seconds` - Maximum retry interval in seconds.
+
+Type:
+
+```hcl
+object({
+    error_message_regex  = optional(list(string), ["ScopeLocked", "PrincipalNotFound", "LinkedAuthorizationFailed"])
+    interval_seconds     = optional(number, 15)
+    max_interval_seconds = optional(number, 60)
+  })
 ```
 
 Default: `{}`
 
 ### <a name="input_role_assignments"></a> [role\_assignments](#input\_role\_assignments)
 
-Description: A map of role assignments to create on this resource. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+Description: A map of role assignments to create on the network security perimeter. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
 
+- `name` - (Optional) The name of the role assignment. If not set, a random UUID will be generated. Changing this forces the creation of a new resource.
 - `role_definition_id_or_name` - The ID or name of the role definition to assign to the principal.
 - `principal_id` - The ID of the principal to assign the role to.
-- `description` - The description of the role assignment.
-- `skip_service_principal_aad_check` - If set to true, skips the Azure Active Directory check for the service principal in the tenant. Defaults to false.
-- `condition` - The condition which will be used to scope the role assignment.
-- `condition_version` - The version of the condition syntax. Valid values are '2.0'.
-- `delegated_managed_identity_resource_id` - The delegated Azure Resource Id which contains a Managed Identity. Changing this forces a new resource to be created.
-- `principal_type` - The type of the principal\_id. Possible values are `User`, `Group` and `ServicePrincipal`. Changing this forces a new resource to be created. It is necessary to explicitly set this attribute when creating role assignments if the principal creating the assignment is constrained by ABAC rules that filters on the PrincipalType attribute.
+- `description` - (Optional) The description of the role assignment.
+- `skip_service_principal_aad_check` - (Optional) If set to true, skips the Azure Active Directory check for the service principal in the tenant. Defaults to false.
+- `condition` - (Optional) The condition which will be used to scope the role assignment.
+- `condition_version` - (Optional) The version of the condition syntax. Leave as `null` if you are not using a condition, if you are then valid values are '2.0'.
+- `delegated_managed_identity_resource_id` - (Optional) The delegated Azure Resource Id which contains a Managed Identity. Changing this forces a new resource to be created. This field is only used in cross-tenant scenario.
+- `principal_type` - (Optional) The type of the `principal_id`. Possible values are `User`, `Group` and `ServicePrincipal`. It is necessary to explicitly set this attribute when creating role assignments if the principal creating the assignment is constrained by ABAC rules that filters on the PrincipalType attribute.
 
 > Note: only set `skip_service_principal_aad_check` to true if you are assigning a role to a service principal.
 
@@ -271,6 +704,7 @@ Type:
 
 ```hcl
 map(object({
+    name                                   = optional(string, null)
     role_definition_id_or_name             = string
     principal_id                           = string
     description                            = optional(string, null)
@@ -289,6 +723,28 @@ Default: `{}`
 Description: (Optional) Tags of the resource.
 
 Type: `map(string)`
+
+Default: `null`
+
+### <a name="input_timeouts"></a> [timeouts](#input\_timeouts)
+
+Description: Operation timeouts for supported AzAPI resources, cascaded unchanged to children. Defaults to null (provider defaults).
+
+- `create` - Create timeout as a Go duration.
+- `read` - Read timeout as a Go duration.
+- `update` - Update timeout as a Go duration.
+- `delete` - Delete timeout as a Go duration.
+
+Type:
+
+```hcl
+object({
+    create = optional(string)
+    read   = optional(string)
+    update = optional(string)
+    delete = optional(string)
+  })
+```
 
 Default: `null`
 
@@ -318,7 +774,7 @@ Description: A map of the NSP profile submodule outputs. Keyed by the map key us
 
 ### <a name="output_resource"></a> [resource](#output\_resource)
 
-Description: The full network security perimeter resource object.
+Description: Stable perimeter identity attributes. Raw provider objects are no longer exported.
 
 ### <a name="output_resource_associations"></a> [resource\_associations](#output\_resource\_associations)
 
@@ -331,6 +787,12 @@ Description: The resource ID of the network security perimeter.
 ## Modules
 
 The following Modules are called:
+
+### <a name="module_avm_interfaces"></a> [avm\_interfaces](#module\_avm\_interfaces)
+
+Source: Azure/avm-utl-interfaces/azure
+
+Version: 0.10.0
 
 ### <a name="module_nsp_access_rule"></a> [nsp\_access\_rule](#module\_nsp\_access\_rule)
 
