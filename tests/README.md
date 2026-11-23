@@ -2,6 +2,15 @@
 
 Provider-mocked tests run with `avm test unit`.
 
+`Invoke-RoleIdentityPlanRegression.ps1 -EvidenceDirectory <new-private-directory>`
+runs 17 pinned real-provider planning scenarios against synthetic state for
+configured selector retention, legacy keepers, mismatch rejection and intentional
+identity changes. It invokes `Assert-RoleIdentityPlan.ps1` and covers nine UUID
+paths; deferred retention covers eight assignments, excluding the lookup-only
+reference child's unknown-parent replacement limitation. Never apply these
+plans. This is offline provider-plan coverage, not a live keeper migration,
+Azure persistence or selective replacement proof.
+
 `fixtures/role_lookup` reproduces fresh NSP/profile/rule scopes whose names and
 parent IDs are already known, including a standalone profile with a literal
 parent ID. Save a real-provider plan with telemetry disabled, export it with

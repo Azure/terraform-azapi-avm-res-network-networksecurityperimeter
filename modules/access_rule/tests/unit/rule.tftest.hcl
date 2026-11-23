@@ -143,7 +143,7 @@ run "standalone_rule_extensions" {
     error_message = "Standalone access-rule extensions must stay at the rule scope."
   }
   assert {
-    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == azapi_resource.this.id && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/accessRules/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId) && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "PrincipalNotFound") && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "LinkedAuthorizationFailed")
+    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == azapi_resource.this.id && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/accessRules/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(var.role_assignments.reader.role_definition_id_or_name) && azapi_resource.role_assignments["reader"].replace_triggers_external_values.role_definition_id == lower(var.role_assignments.reader.role_definition_id_or_name) && azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId == data.azapi_resource_list.role_definitions["child"].output.results[0].id && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "PrincipalNotFound") && contains(azapi_resource.role_assignments["reader"].retry.error_message_regex, "LinkedAuthorizationFailed")
     error_message = "Rule lookup scope, identity-keyed UUIDs and standalone RBAC retry defaults must be retained."
   }
   providers = {

@@ -19,13 +19,31 @@ module "avm" {
   role_assignments                          = local.extension_assignments[each.key]
 }
 
+resource "terraform_data" "role_assignment_selector" {
+  for_each = var.role_assignments
+
+  triggers_replace = lower(each.value.role_definition_id_or_name)
+}
+
+resource "terraform_data" "target_role_assignment_selector" {
+  for_each = local.extension_scopes.target.assignments
+
+  triggers_replace = lower(each.value.role_definition_id_or_name)
+}
+
 resource "random_uuid" "role_assignment_name" {
   for_each = var.role_assignments
 
   keepers = {
     scope        = lower(local.extension_scopes.child.scope)
     principal_id = lower(each.value.principal_id)
-    role_id      = lower(local.extension_assignments.child[each.key].role_definition_id_or_name)
+    role_id      = lower(each.value.role_definition_id_or_name)
+  }
+
+  lifecycle {
+    # Retain legacy resolved-ID keepers; the selector resource owns future role rotation.
+    ignore_changes       = [keepers["role_id"]]
+    replace_triggered_by = [terraform_data.role_assignment_selector[each.key]]
   }
 }
 
@@ -35,7 +53,12 @@ resource "random_uuid" "target_role_assignment_name" {
   keepers = {
     scope        = lower(local.extension_scopes.target.scope)
     principal_id = lower(each.value.principal_id)
-    role_id      = lower(local.extension_assignments.target[each.key].role_definition_id_or_name)
+    role_id      = lower(each.value.role_definition_id_or_name)
+  }
+
+  lifecycle {
+    ignore_changes       = [keepers["role_id"]]
+    replace_triggered_by = [terraform_data.target_role_assignment_selector[each.key]]
   }
 }
 
@@ -52,7 +75,7 @@ resource "azapi_resource" "role_assignments" {
   replace_triggers_external_values = {
     name                                   = each.value.name
     principal_id                           = lower(each.value.principal_id)
-    role_definition_id                     = lower(local.extension_assignments.child[each.key].role_definition_id_or_name)
+    role_definition_id                     = random_uuid.role_assignment_name[each.key].keepers.role_id
     principal_type                         = local.extension_assignments.child[each.key].principal_type
     description                            = each.value.description
     condition                              = each.value.condition
@@ -80,6 +103,14 @@ resource "azapi_resource" "role_assignments" {
       condition     = strcontains(lower(local.extension_assignments.child[each.key].role_definition_id_or_name), local.role_definition_resource_substring)
       error_message = "The role definition was not found at the assignable scope; supply an assignable role name or resource ID."
     }
+
+    precondition {
+      condition = random_uuid.role_assignment_name[each.key].keepers.role_id == lower(each.value.role_definition_id_or_name) ? true : (
+        strcontains(random_uuid.role_assignment_name[each.key].keepers.role_id, local.role_definition_resource_substring) ?
+        random_uuid.role_assignment_name[each.key].keepers.role_id == lower(local.extension_assignments.child[each.key].role_definition_id_or_name) : false
+      )
+      error_message = "The retained role ID does not match the resolved role. Keep the actual role unchanged for the first selector-migration apply; inspect the upgrade guide before changing it."
+    }
   }
 }
 
@@ -96,7 +127,7 @@ resource "azapi_resource" "target_role_assignments" {
   replace_triggers_external_values = {
     name                                   = each.value.name
     principal_id                           = lower(each.value.principal_id)
-    role_definition_id                     = lower(local.extension_assignments.target[each.key].role_definition_id_or_name)
+    role_definition_id                     = random_uuid.target_role_assignment_name[each.key].keepers.role_id
     principal_type                         = local.extension_assignments.target[each.key].principal_type
     description                            = each.value.description
     condition                              = each.value.condition
@@ -123,6 +154,14 @@ resource "azapi_resource" "target_role_assignments" {
     precondition {
       condition     = strcontains(lower(local.extension_assignments.target[each.key].role_definition_id_or_name), local.role_definition_resource_substring)
       error_message = "The role definition was not found at the assignable scope; supply an assignable role name or resource ID."
+    }
+
+    precondition {
+      condition = random_uuid.target_role_assignment_name[each.key].keepers.role_id == lower(each.value.role_definition_id_or_name) ? true : (
+        strcontains(random_uuid.target_role_assignment_name[each.key].keepers.role_id, local.role_definition_resource_substring) ?
+        random_uuid.target_role_assignment_name[each.key].keepers.role_id == lower(local.extension_assignments.target[each.key].role_definition_id_or_name) : false
+      )
+      error_message = "The retained role ID does not match the resolved role. Keep the actual role unchanged for the first selector-migration apply; inspect the upgrade guide before changing it."
     }
   }
   depends_on = [terraform_data.remote_scope]

@@ -47,7 +47,7 @@ run "generated_identity_lookup_and_default_retries" {
     error_message = "Omitted names must use the identity-keyed real random UUID."
   }
   assert {
-    condition     = random_uuid.role_assignment_name["generated"].keepers.scope == lower(local.perimeter_resource_id) && random_uuid.role_assignment_name["generated"].keepers.principal_id == var.role_assignments.generated.principal_id && random_uuid.role_assignment_name["generated"].keepers.role_id == lower(data.azapi_resource_list.role_definitions[0].output.results[0].id)
+    condition     = random_uuid.role_assignment_name["generated"].keepers.scope == lower(local.perimeter_resource_id) && random_uuid.role_assignment_name["generated"].keepers.principal_id == var.role_assignments.generated.principal_id && random_uuid.role_assignment_name["generated"].keepers.role_id == lower(var.role_assignments.generated.role_definition_id_or_name) && azapi_resource.role_assignments["generated"].replace_triggers_external_values.role_definition_id == lower(var.role_assignments.generated.role_definition_id_or_name) && azapi_resource.role_assignments["generated"].body.properties.roleDefinitionId == data.azapi_resource_list.role_definitions[0].output.results[0].id
     error_message = "All three immutable assignment identities must participate in UUID rotation."
   }
   assert {
@@ -57,6 +57,38 @@ run "generated_identity_lookup_and_default_retries" {
   assert {
     condition     = azapi_resource.role_assignments["generated"].retry.error_message_regex == tolist(["ScopeLocked", "PrincipalNotFound", "LinkedAuthorizationFailed"])
     error_message = "RBAC lock-propagation and principal/delegated replication errors must be retryable by default."
+  }
+}
+
+run "case_only_selector_preserves_uuid" {
+  command = apply
+  variables {
+    role_assignments = {
+      generated = {
+        principal_id               = "00000000-0000-0000-0000-000000000001"
+        role_definition_id_or_name = "RG CUSTOM READER"
+      }
+    }
+  }
+  assert {
+    condition     = random_uuid.role_assignment_name["generated"].keepers.role_id == "rg custom reader" && azapi_resource.role_assignments["generated"].replace_triggers_external_values.role_definition_id == "rg custom reader"
+    error_message = "Changing only selector casing must retain normalized UUID keeper and replacement role components."
+  }
+}
+
+run "configured_role_change_rotates_uuid" {
+  command = apply
+  variables {
+    role_assignments = {
+      generated = {
+        principal_id               = "00000000-0000-0000-0000-000000000001"
+        role_definition_id_or_name = "/providers/Microsoft.Authorization/roleDefinitions/00000000-0000-0000-0000-000000000030"
+      }
+    }
+  }
+  assert {
+    condition     = random_uuid.role_assignment_name["generated"].keepers.role_id == lower(var.role_assignments.generated.role_definition_id_or_name) && azapi_resource.role_assignments["generated"].replace_triggers_external_values.role_definition_id == lower(var.role_assignments.generated.role_definition_id_or_name)
+    error_message = "A configured role change must reach both identity components independently of role lookup; real-provider plans test replacement."
   }
 }
 

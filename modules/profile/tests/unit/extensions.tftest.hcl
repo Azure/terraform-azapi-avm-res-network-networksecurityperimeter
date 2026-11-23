@@ -60,8 +60,8 @@ run "explicit_scope_body_identity_controls" {
     error_message = "Canonical role input must map to the verified ARM body and case-insensitive role lookup."
   }
   assert {
-    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == azapi_resource.this.id && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/profiles/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId)
-    error_message = "Lookup must depend on the created profile while UUID keepers retain their normalized role ID and scope."
+    condition     = data.azapi_resource_list.role_definitions["child"].parent_id == azapi_resource.this.id && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/profiles/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(var.role_assignments.reader.role_definition_id_or_name) && azapi_resource.role_assignments["reader"].replace_triggers_external_values.role_definition_id == lower(var.role_assignments.reader.role_definition_id_or_name) && azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId == data.azapi_resource_list.role_definitions["child"].output.results[0].id
+    error_message = "Lookup must depend on the created profile; identity uses the configured selector while the body uses the resolved ID."
   }
   assert {
     condition     = azapi_resource.lock[0].name == "lock-CanNotDelete" && azapi_resource.lock[0].body.properties.level == "CanNotDelete" && azapi_resource.lock[0].retry.interval_seconds == 3 && azapi_resource.role_assignments["reader"].timeouts.delete == "8m" && azapi_resource.lock[0].type == var.resource_types.authorization_locks

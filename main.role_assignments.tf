@@ -19,13 +19,25 @@ module "avm_interfaces" {
   role_assignments                          = local.role_assignments
 }
 
+resource "terraform_data" "role_assignment_selector" {
+  for_each = var.role_assignments
+
+  triggers_replace = lower(each.value.role_definition_id_or_name)
+}
+
 resource "random_uuid" "role_assignment_name" {
   for_each = var.role_assignments
 
   keepers = {
     scope        = lower(trimsuffix(local.perimeter_resource_id, "/"))
     principal_id = lower(each.value.principal_id)
-    role_id      = lower(local.role_assignments[each.key].role_definition_id_or_name)
+    role_id      = lower(each.value.role_definition_id_or_name)
+  }
+
+  lifecycle {
+    # Retain legacy resolved-ID keepers; the selector resource owns future role rotation.
+    ignore_changes       = [keepers["role_id"]]
+    replace_triggered_by = [terraform_data.role_assignment_selector[each.key]]
   }
 }
 
@@ -42,7 +54,7 @@ resource "azapi_resource" "role_assignments" {
   replace_triggers_external_values = {
     name                                   = each.value.name
     principal_id                           = lower(each.value.principal_id)
-    role_definition_id                     = lower(local.role_assignments[each.key].role_definition_id_or_name)
+    role_definition_id                     = random_uuid.role_assignment_name[each.key].keepers.role_id
     principal_type                         = local.role_assignments[each.key].principal_type
     description                            = each.value.description
     condition                              = each.value.condition
@@ -70,5 +82,12 @@ resource "azapi_resource" "role_assignments" {
       error_message = "The role definition was not found at the assignable scope; supply an assignable role name or resource ID."
     }
 
+    precondition {
+      condition = random_uuid.role_assignment_name[each.key].keepers.role_id == lower(each.value.role_definition_id_or_name) ? true : (
+        strcontains(random_uuid.role_assignment_name[each.key].keepers.role_id, local.role_definition_resource_substring) ?
+        random_uuid.role_assignment_name[each.key].keepers.role_id == lower(local.role_assignments[each.key].role_definition_id_or_name) : false
+      )
+      error_message = "The retained role ID does not match the resolved role. Keep the actual role unchanged for the first selector-migration apply; inspect the upgrade guide before changing it."
+    }
   }
 }

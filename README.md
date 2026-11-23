@@ -87,11 +87,27 @@ qualification is separate from lookup scope.
 With AzAPI there is no Microsoft Graph pre-check: setting
 `skip_service_principal_aad_check = true` supplies `principalType = ServicePrincipal`
 when no explicit principal type was given. Adopted assignment GUIDs are retained.
-Generated assignment UUIDs rotate when the principal, resolved role or scope
+Generated assignment UUIDs rotate when the principal, lowercased configured
+`role_definition_id_or_name` selector or scope
 changes, including target RBAC during association retargeting. Existing assignment
 names are retained on unchanged upgrades; additional UUID resources are state-only.
 A changed explicit `name` also triggers replacement. If you supply an explicit
 GUID, supply a new GUID when changing principal, role or scope.
+Case-only role selector changes retain identity. State-only selector resources
+track future role changes while a narrow UUID role-keeper ignore preserves
+legacy resolved-ID keepers and matching external role triggers. The first
+migration must keep the actual role unchanged; a retained role-ID check runs
+after lookup and before any RBAC write. Once selector metadata exists, changing
+between a name and equivalent ID rotates identity. Missing/divergent UUID state
+is not an automatic retention path. See [the upgrade guide](UPGRADE.md) for
+prerequisites, bounded synthetic-plan evidence and the independently applied
+released v0.2.0 upgrade. That live upgrade retained the generated root Reader
+GUID and representative child relationships; it does not prove all nine RBAC
+paths. The unreleased `c8b48e8` keeper transition is supplementary and was not
+applied: its rejected plan retained assignments but replaced seven telemetry
+deployments due to unknown parent IDs. Repeat deferral, case-only live retention
+and live immutable mutations remain untested. The lookup-only reference child
+also retains a known unknown-parent replacement limitation.
 Default retry patterns include `PrincipalNotFound` and `LinkedAuthorizationFailed`
 for RBAC replication, as well as `ScopeLocked`; retries do not grant permissions.
 Override `retry.error_message_regex` to replace the patterns or set `retry = null`
@@ -163,7 +179,7 @@ Existing externally owned locks require opt-out. Existing assignments require
 empty RBAC inputs or deliberate state adoption preserving their GUIDs.
 AzAPI's create-time existence check rejects an existing ARM object; no automatic
 import is introduced for new extensions. Preserve keys after deliberate imports.
-Only the legacy root assignments retain the migration-specific name ignore.
+All owned assignments retain the narrow name ignore for deliberately adopted GUIDs.
 
 Extension controls are in each child's `resource_types` and
 `ignore_body_changes` slots, directly under that child's ARM-type key.
@@ -237,6 +253,7 @@ The following resources are used by this module:
 - [azapi_resource.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.this](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [random_uuid.role_assignment_name](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/uuid) (resource)
+- [terraform_data.role_assignment_selector](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [terraform_data.telemetry](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
 - [azapi_client_config.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
 - [azapi_resource_list.role_definitions](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/resource_list) (data source)

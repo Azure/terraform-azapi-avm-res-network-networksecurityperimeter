@@ -49,11 +49,44 @@ blanket upgrade safety is claimed.
 The subsequent required `default` E2E run at `3c9a7c8` failed because aggregate
 ownership checks read role definitions at NSP/child scopes before creation.
 Its automatic destroy also failed; cleanup of that CI fixture is not verified.
-The current correction removes aggregate and child duplicate/GUID ownership
+The correction through `c8b48e8` removes aggregate and child duplicate/GUID ownership
 checks and orders role-name reads and extension writes after the actual scope
 resource. Assignment keys, UUID keepers and immutable-input triggers are
-unchanged. Earlier live evidence remains attributed to its original candidates;
-it does not verify this corrected dependency graph or its upgrade/destroy paths.
+unchanged at that candidate. The subsequent selector-keyed identity safeguards
+below retain stored role components and add state-only selector tracking. Earlier
+live evidence remains attributed to its original candidates.
+
+**Latest released-baseline verification (2026-11-23):** released v0.2.0
+(`b1933fb2b8c857d97a2e642873a768256203f48c`) was successfully applied and
+upgraded directly in the same nested consumer/backend/state to the frozen
+safeguards source over `c8b48e8`, manifest SHA256
+`42814aa948ed952ce2eae61a3a43291daa26ca0b9e2a53cd3c6fa4b62660a95f`.
+This is the dirty full-source snapshot, not the published `c8b48e8` commit alone.
+The inspected and applied plan had 14 updates, five additions, three moves,
+zero deletes and zero replacements. All 16 original Azure identities and
+covered relationships were retained, including the released generated Reader
+GUID, root lock, two profiles, two rules, Storage association and six telemetry
+deployments. Four additions were state-only helpers; the fifth was one empty
+utility telemetry deployment. The complete Reader PUT retained the same ID,
+principal and role, with no DELETE. Two normal refreshed plans each had only
+seven narrow telemetry timestamp/output updates and zero infrastructure changes.
+Normal teardown passed; independent readbacks found all 38 cumulative IDs across
+both fixtures absent, both states empty and the shared resource group preserved.
+Tools were Terraform 1.17.2, AzAPI 2.14.0, AzureRM 4.81.0 (released bindings/state
+conversion only), random 3.9.1 and interfaces 0.10.0. No one-time migration flag
+was required. This is representative released-root/child coverage, not all-nine
+live RBAC-path coverage or proof for untested configurations.
+
+The separate **unreleased `c8b48e8` keeper transition is supplementary, not a
+required released upgrade path**. Its live-state plan retained four assignments
+and their UUIDs but proposed seven telemetry delete/create replacements because
+`parent_id` became unknown under a changed consumer dependency. The entire plan
+was rejected before apply; those replacements are not timestamp-only updates.
+The keeper transition, repeat deferral on migrated keeper state, case-only live
+retention and live immutable mutations remain untested. This supplementary path
+was explicitly excluded from required coverage; it is not a claimed pass.
+The earlier failed CI deployment/destroy and its unverified cleanup remain
+historical failures, distinct from the successful isolated cleanup above.
 
 Do not replay child moves when state already has the
 destination addresses. Review the candidate's parent-ID, output, root provider
@@ -117,13 +150,92 @@ Input-based replacement triggers retain immutable-input behavior; their first
 adoption and subsequent changes still require real plan verification.
 Lock level and notes changes also retain the released replacement behavior.
 
-Generated role-assignment names now use module-owned UUIDs keyed by normalized
-scope, principal and resolved role ID. The new UUID bindings are state-only
+Fresh generated role-assignment names use module-owned UUIDs keyed by normalized
+scope, principal and the **lowercased configured `role_definition_id_or_name`**.
+The actual RBAC body still uses the resolved, normalized role-definition ID.
+An unchanged selector remains known when a module-level `depends_on` defers
+the role lookup; case-only selector changes do not rotate identity. Changing
+the configured selector does rotate identity, including switching between a
+name and an equivalent ID (or between differently prefixed IDs).
+The new UUID bindings are state-only
 additions; existing utility UUID bindings remain in place. The assignment's
 name ignore preserves an existing GUID on an unchanged upgrade, while an
 intentional principal/role/scope replacement uses a newly generated UUID.
 This applies to primary, child and target assignments. For explicit `name`
 values, the caller must choose a new GUID when changing principal, role or scope.
+
+### Identity design and migration safeguards
+
+Configured selectors are the long-term identity input: an unchanged role name
+must not cause replacement merely because a dependency defers its lookup.
+The Azure assignment body still uses the resolved role ID. Existing UUID
+keepers may retain that ID as a **known stored compatibility value**, not a
+new dependency on a deferred lookup.
+
+For each root/child/target assignment the module now:
+
+- Adds a `terraform_data.role_assignment_selector` (or target counterpart)
+  with `triggers_replace` set to the lowercased configured selector.
+- Retains only the existing UUID keeper's `role_id` with a narrow lifecycle
+  ignore. Scope and principal keepers remain change-sensitive.
+- Reuses that keeper in the assignment's external `role_definition_id` trigger,
+  preserving the prior component when both previously stored the same ID.
+- Replaces the UUID when an **existing** selector resource changes. New
+  selector creation does not replace an existing UUID. An intentional UUID
+  replacement initializes all keepers from current configured inputs.
+- Checks a retained legacy role ID against the actual resolved role **before
+  any RBAC write**. A retained name selector that disagrees with the configured
+  selector is rejected when no existing selector signal caused replacement.
+
+There is no whole-keeper/body ignore, global ownership guard, state lookup,
+targeted apply, or automatic import. Existing names retain the narrow name
+ignore; all other immutable-input triggers and real resource dependencies remain.
+
+**First-transition prerequisite:** preserve keys, principal, scope and the
+actual assigned role in the ordinary full migration plan/apply. Through
+`c8b48e8`, name-based assignments stored only resolved IDs, not their configured
+names. Terraform cannot infer whether a now-configured name denotes the same
+role while its lookup is unknown. The role-ID check is consequently deferred
+until lookup completes, and rejects a mismatch before the assignment operation.
+Do not combine an intended role-only change with this first transition.
+If such a change is required now, the state owner must explicitly choose a
+separately reviewed replacement path rather than waive that check.
+This check is not a transaction: a failed apply can already have persisted
+state-only selector resources. Inspect the resulting state and a new full plan
+with the state owner before recovery; no automatic rollback is promised.
+
+The compatibility path requires the matching module-owned UUID keeper and
+external role trigger to remain in state. It retains generated UUIDs as well
+as explicit/adopted assignment names with those bindings. An independently
+imported assignment with no matching UUID, divergent old trigger/keeper values,
+or lost selector metadata is **not** an advertised automatic retention path.
+Inspect its saved plan and obtain a state-owner decision; do not accept a
+replacement as a harmless migration or edit per-assignment state silently.
+The existing AzureRM provider-move path remains separate and requires its own
+released-baseline verification; the representative v0.2.0 root GUID adoption
+described above passed independently of these unreleased keeper bindings.
+
+After selector metadata is persisted, unchanged inputs and case-only changes
+retain the old UUID/role-trigger component even on repeat dependency deferral.
+A changed selector (including equivalent name/ID representations), principal
+or scope rotates the generated UUID and replaces the assignment. No migration
+flag needs removal. Preserve the selector resources in state.
+Explicit names still require a new configured GUID for genuine immutable
+changes; an unchanged explicit GUID does not make delete/create safe.
+
+Offline real-provider synthetic-state plans verify the retention/replacement
+decisions across 17 scenarios, but do not establish applied old-keeper migration,
+Azure RBAC persistence or selective replacement under locks. The separate
+direct released v0.2.0 upgrade above proves covered root GUID adoption and
+representative relationships, convergence and cleanup. Current-head fresh E2E
+and broader live role/mutation coverage remain separate checks; historical live
+passes above are not relabelled. An unchanged explicit GUID on a genuine
+immutable-input change is documented as unsafe, but is not universally rejected
+by an implemented fresh-name guard.
+The lookup-only link-reference child assignment has a separate limitation:
+module-level `depends_on` can defer its resource lookup and make `parent_id`
+unknown, still planning replacement even with a known role selector. This
+role-component correction does not fix or prove that parent-ID surface.
 Stage ancestor unlock/change/relock as documented below; UUID rotation does not
 unlock an unchanged lock. Link-owned locks now follow remote-target replacement
 of the link at its unchanged ARM ID.
