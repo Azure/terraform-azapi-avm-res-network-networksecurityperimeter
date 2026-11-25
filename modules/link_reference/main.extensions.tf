@@ -66,7 +66,7 @@ resource "azapi_resource" "role_assignments" {
   for_each = var.role_assignments
 
   name                 = coalesce(each.value.name, random_uuid.role_assignment_name[each.key].result)
-  parent_id            = data.azapi_resource.this.id
+  parent_id            = local.extension_scopes.child.scope
   type                 = var.resource_types.authorization_role_assignments
   body                 = module.avm["child"].role_assignments_azapi[each.key].body
   ignore_body_changes  = length(var.ignore_body_changes.authorization_role_assignments) > 0 ? var.ignore_body_changes.authorization_role_assignments : null
@@ -112,6 +112,7 @@ resource "azapi_resource" "role_assignments" {
       error_message = "The retained role ID does not match the resolved role. Keep the actual role unchanged for the first selector-migration apply; inspect the upgrade guide before changing it."
     }
   }
+  depends_on = [terraform_data.remote_scope]
 }
 
 resource "azapi_resource" "target_role_assignments" {
@@ -171,7 +172,7 @@ resource "azapi_resource" "lock" {
   count = var.lock == null ? 0 : 1
 
   name                   = module.avm["child"].lock_azapi.name
-  parent_id              = data.azapi_resource.this.id
+  parent_id              = local.extension_scopes.child.scope
   type                   = var.resource_types.authorization_locks
   body                   = module.avm["child"].lock_azapi.body
   ignore_body_changes    = length(var.ignore_body_changes.authorization_locks) > 0 ? var.ignore_body_changes.authorization_locks : null
@@ -189,7 +190,7 @@ resource "azapi_resource" "lock" {
     }
   }
 
-  depends_on = [azapi_resource.role_assignments]
+  depends_on = [terraform_data.remote_scope, azapi_resource.role_assignments]
 }
 
 resource "azapi_resource" "target_lock" {
@@ -232,4 +233,5 @@ resource "terraform_data" "remote_scope" {
       error_message = "A link reference must reference a different perimeter."
     }
   }
+  depends_on = [data.azapi_resource.this]
 }

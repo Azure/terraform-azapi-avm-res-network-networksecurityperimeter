@@ -89,6 +89,7 @@ module "reference" {
   name             = "reference"
   parent_id        = local.perimeter_id
   enable_telemetry = false
+  lock             = { kind = "CanNotDelete" }
   remote_perimeter_extensions = {
     lock_inheritance_enabled = false
     role_assignments         = local.role_assignments

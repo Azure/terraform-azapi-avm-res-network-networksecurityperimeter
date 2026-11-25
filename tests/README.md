@@ -6,8 +6,8 @@ Provider-mocked tests run with `avm test unit`.
 runs 17 pinned real-provider planning scenarios against synthetic state for
 configured selector retention, legacy keepers, mismatch rejection and intentional
 identity changes. It invokes `Assert-RoleIdentityPlan.ps1` and covers nine UUID
-paths; deferred retention covers eight assignments, excluding the lookup-only
-reference child's unknown-parent replacement limitation. Never apply these
+paths; deferred retention covers all nine assignments and the reference lock,
+with known reference scopes and explicit GET-before-write dependencies. Never apply these
 plans. This is offline provider-plan coverage, not a live keeper migration,
 Azure persistence or selective replacement proof.
 

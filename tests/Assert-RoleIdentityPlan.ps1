@@ -52,14 +52,7 @@ foreach ($assignment in $assignments) {
   if (!$assignment.change.after_unknown.body.properties.roleDefinitionId) {
     throw "RBAC body must still wait for the resolved role ID: $($assignment.address)"
   }
-  # The lookup-only reference's parent ID is independently unknown under depends_on.
-  $referenceChild = $assignment.address -eq 'module.reference.azapi_resource.role_assignments["reader"]'
-  if ($referenceChild -and !$replace -and
-    (($assignment.change.replace_paths | ConvertTo-Json -Depth 20) -notmatch 'parent_id' -or
-      !$assignment.change.after_unknown.parent_id)) {
-    throw 'Reference-child replacement must be explained by its independently deferred parent ID.'
-  }
-  if (!$referenceChild -and $replace -ne ($assignment.change.actions -contains 'delete')) {
+  if ($replace -ne ($assignment.change.actions -contains 'delete')) {
     throw "Unexpected assignment replacement: $($assignment.address)"
   }
   if (!$replace -and ($assignment.change.replace_paths | ConvertTo-Json -Depth 20) -match 'replace_triggers_external_values') {
@@ -69,7 +62,7 @@ foreach ($assignment in $assignments) {
     $assignment.change.after.replace_triggers_external_values.role_definition_id) {
     throw "Stored external role component must be retained: $($assignment.address)"
   }
-  if (!$replace -and !$referenceChild -and $assignment.change.before.name -ne $assignment.change.after.name) {
+  if (!$replace -and $assignment.change.before.name -ne $assignment.change.after.name) {
     throw "Existing generated/explicit/adopted GUID must be retained: $($assignment.address)"
   }
   if ($replace -and $Scenario -ne 'explicit-role-change' -and !$assignment.change.after_unknown.name) {
@@ -78,6 +71,33 @@ foreach ($assignment in $assignments) {
   if ($Scenario -eq 'explicit-role-change' -and
     $assignment.change.after.name -ne '00000000-0000-0000-0000-000000000100') {
     throw "Explicit immutable replacement must use the newly configured GUID: $($assignment.address)"
+  }
+}
+$reference = @($plan.resource_changes | Where-Object address -EQ 'module.reference.data.azapi_resource.this')
+$referenceLock = @($plan.resource_changes | Where-Object address -EQ 'module.reference.azapi_resource.lock[0]')
+$referenceAssignment = @($assignments | Where-Object address -EQ 'module.reference.azapi_resource.role_assignments["reader"]')
+if ($reference.Count -ne 1 -or ($reference[0].change.actions -join '+') -ne 'read' -or
+  !$reference[0].change.after_unknown.id) {
+  throw 'Reference GET must remain deferred by the pending module dependency.'
+}
+foreach ($extension in @($referenceLock) + @($referenceAssignment)) {
+  if ($extension.change.after_unknown.parent_id -or
+    $extension.change.after.parent_id -ne "$($reference[0].change.after.parent_id)/linkReferences/$($reference[0].change.after.name)") {
+    throw "Reference extension parent must remain the configured scope: $($extension.address)"
+  }
+}
+if ($referenceLock.Count -ne 1 -or ($referenceLock[0].change.actions -join '+') -ne 'no-op') {
+  throw 'Unchanged reference lock must remain a no-op despite the deferred GET.'
+}
+$referenceConfig = $plan.configuration.root_module.module_calls.reference.module.resources
+$scopeGuard = @($referenceConfig | Where-Object address -EQ 'terraform_data.remote_scope')
+if ($scopeGuard.Count -ne 1 -or $scopeGuard[0].depends_on -notcontains 'data.azapi_resource.this') {
+  throw 'Reference scope validation must still wait for the GET.'
+}
+foreach ($address in @('azapi_resource.role_assignments', 'azapi_resource.lock')) {
+  $extension = @($referenceConfig | Where-Object address -EQ $address)
+  if ($extension.Count -ne 1 -or $extension[0].depends_on -notcontains 'terraform_data.remote_scope') {
+    throw "Reference writes must remain ordered after GET-backed scope validation: $address"
   }
 }
 $selectors = @($plan.resource_changes | Where-Object {
@@ -99,4 +119,4 @@ $assignmentChecks = @($plan.checks | Where-Object {
 if ($assignmentChecks.Count -ne 9 -or @($assignmentChecks | Where-Object status -NE 'unknown').Count) {
   throw 'Deferred lookup validations must remain unknown, not falsely counted as passed.'
 }
-"PASS: $Scenario; nine stable input role components; reference child parent-ID surface classified separately."
+"PASS: $Scenario; all nine role paths checked; deferred reference GET retains known extension scopes and lock."

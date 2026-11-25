@@ -104,8 +104,9 @@ GUID and representative child relationships; it does not prove all nine RBAC
 paths. The unreleased `c8b48e8` keeper transition is supplementary and was not
 applied: its rejected plan retained assignments but replaced seven telemetry
 deployments due to unknown parent IDs. Repeat deferral, case-only live retention
-and live immutable mutations remain untested. The lookup-only reference child
-also retains a known unknown-parent replacement limitation.
+and live immutable mutations remain untested. Lookup-only reference RBAC and
+locks use the configured reference scope to avoid replacement solely because
+its GET is deferred; writes still wait for that GET and scope validation.
 Default retry patterns include `PrincipalNotFound` and `LinkedAuthorizationFailed`
 for RBAC replication, as well as `ScopeLocked`; retries do not grant permissions.
 Override `retry.error_message_regex` to replace the patterns or set `retry = null`

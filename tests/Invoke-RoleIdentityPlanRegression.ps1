@@ -75,7 +75,7 @@ try {
     $_.type -eq 'terraform_data' -and $_.name -in @('role_assignment_selector', 'target_role_assignment_selector')
   })
   $freshAssignments = @($resources | Where-Object {
-    $_.type -eq 'azapi_resource' -and $_.name -ne 'this'
+    $_.type -eq 'azapi_resource' -and $_.name -in @('role_assignments', 'target_role_assignments')
   })
   if ($freshUuids.Count -ne 9 -or $freshSelectors.Count -ne 9 -or $freshAssignments.Count -ne 9 -or
     @($freshUuids | Where-Object { $_.values.keepers.role_id -ne 'reader' }).Count -or
@@ -118,6 +118,9 @@ try {
         $values.output = @{}
         if ($r.name -eq 'this') {
           $values.id = $scopeIds[$module]
+        } elseif ($r.name -eq 'lock') {
+          $values.parent_id = $scopeIds[$module]
+          $values.id = "$($values.parent_id)/providers/Microsoft.Authorization/locks/$($values.name)"
         } else {
           $isTarget = $r.name -eq 'target_role_assignments'
           $uuidName = if ($isTarget) { 'target_role_assignment_name' } else { 'role_assignment_name' }
@@ -176,7 +179,7 @@ try {
       foreach ($r in $scenarioState.resources) {
         $a = $r.instances[0].attributes
         if ($r.type -eq 'random_uuid' -and $a.keepers) { $a.keepers.role_id = $readerId.ToLowerInvariant() }
-        if ($r.type -eq 'azapi_resource' -and $r.name -ne 'this') {
+        if ($r.type -eq 'azapi_resource' -and $r.name -in @('role_assignments', 'target_role_assignments')) {
           $a.replace_triggers_external_values.value.role_definition_id = $readerId.ToLowerInvariant()
         }
       }
@@ -192,7 +195,7 @@ try {
     $explicit = '00000000-0000-0000-0000-000000000099'
     if ($scenario -in @('explicit-guid', 'adopted-guid', 'explicit-role-change', 'adopted-role-change')) {
       foreach ($r in $scenarioState.resources | Where-Object type -EQ 'azapi_resource') {
-        if ($r.name -eq 'this') { continue }
+        if ($r.name -notin @('role_assignments', 'target_role_assignments')) { continue }
         $a = $r.instances[0].attributes
         $a.name = $explicit
         $a.id = "$($a.parent_id)/providers/Microsoft.Authorization/roleAssignments/$explicit"
@@ -206,7 +209,7 @@ try {
       foreach ($r in $scenarioState.resources) {
         $a = $r.instances[0].attributes
         if ($r.type -eq 'random_uuid' -and $a.keepers) { $a.keepers.scope += '-old' }
-        if ($r.type -eq 'azapi_resource' -and $r.name -ne 'this') {
+        if ($r.type -eq 'azapi_resource' -and $r.name -in @('role_assignments', 'target_role_assignments')) {
           $a.parent_id += '-old'
           $a.id = "$($a.parent_id)/providers/Microsoft.Authorization/roleAssignments/$($a.name)"
         }

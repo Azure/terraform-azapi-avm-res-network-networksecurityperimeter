@@ -20,8 +20,10 @@ deferral with retained keepers and persisted selector metadata, explicit/adopted
 GUID retention, and rejection of a known first-transition role mismatch. The body still
 waits for the resolved ID. Assignment updates with an unknown body are not
 strict no-ops; this test excludes role-driven replacement, not all plan changes.
-The lookup-only reference child still replaces on unknown `parent_id`; this
-existing, separate cause is asserted rather than counted as a role fix.
+The lookup-only reference GET stays deferred, while its assignment and lock
+retain configured parent scopes. The unchanged lock must be a no-op and the
+assignment must not replace; explicit dependencies must still order both
+writes after GET-backed scope validation.
 Scope-mutation cases synthesize different prior RBAC parent scopes without
 replacing the primary owners: owner replacement invokes planning-time AzAPI
 GETs and cannot be verified by this credential-isolated fixture.

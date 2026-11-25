@@ -232,10 +232,13 @@ and broader live role/mutation coverage remain separate checks; historical live
 passes above are not relabelled. An unchanged explicit GUID on a genuine
 immutable-input change is documented as unsafe, but is not universally rejected
 by an implemented fresh-name guard.
-The lookup-only link-reference child assignment has a separate limitation:
-module-level `depends_on` can defer its resource lookup and make `parent_id`
-unknown, still planning replacement even with a known role selector. This
-role-component correction does not fix or prove that parent-ID surface.
+Lookup-only link-reference RBAC and locks use the reference scope constructed
+from the configured parent ID and name, rather than the GET's computed ID.
+When those inputs are known, deferring the GET through module-level `depends_on`
+does not make the extension parent scope unknown. Explicit dependencies still
+order both writes after the reference GET and remote-scope validation, including
+reference-only locks without remote extensions. Inputs that are genuinely
+unknown remain unknown; this does not remove the lookup or assert live proof.
 Stage ancestor unlock/change/relock as documented below; UUID rotation does not
 unlock an unchanged lock. Link-owned locks now follow remote-target replacement
 of the link at its unchanged ARM ID.

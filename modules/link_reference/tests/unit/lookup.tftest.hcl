@@ -136,6 +136,10 @@ run "lookup_with_extensions" {
     error_message = "The GET-only owner must itself provide tested extension API defaults and cascade resource controls to distinct extension nodes."
   }
   assert {
+    condition     = azapi_resource.role_assignments["reader"].parent_id == local.extension_scopes.child.scope && azapi_resource.lock[0].parent_id == local.extension_scopes.child.scope
+    error_message = "Reference RBAC and lock scopes must use the configured reference identity rather than a computed GET ID."
+  }
+  assert {
     condition     = data.azapi_resource_list.role_definitions["child"].parent_id == "${var.parent_id}/linkReferences/${var.name}" && random_uuid.role_assignment_name["reader"].keepers.scope == lower("${var.parent_id}/linkReferences/${var.name}") && random_uuid.role_assignment_name["reader"].keepers.role_id == lower(var.role_assignments.reader.role_definition_id_or_name) && azapi_resource.role_assignments["reader"].replace_triggers_external_values.role_definition_id == lower(var.role_assignments.reader.role_definition_id_or_name) && azapi_resource.role_assignments["reader"].body.properties.roleDefinitionId == data.azapi_resource_list.role_definitions["child"].output.results[0].id
     error_message = "GET-only reference ownership must still resolve custom roles at the assignment scope and rotate generated UUIDs by identity."
   }
