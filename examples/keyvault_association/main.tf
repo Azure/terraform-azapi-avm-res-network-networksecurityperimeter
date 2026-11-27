@@ -25,7 +25,7 @@ provider "azurerm" {
 ## Section to provide a random Azure region for the resource group
 module "regions" {
   source  = "Azure/avm-utl-regions/azurerm"
-  version = "0.13.0"
+  version = "0.15.0"
 
   location               = var.location
   enable_telemetry       = var.enable_telemetry
@@ -42,7 +42,7 @@ resource "random_integer" "region_index" {
 
 module "naming" {
   source  = "Azure/avm-utl-naming/azure"
-  version = "0.2.0"
+  version = "0.3.0"
 }
 
 data "azurerm_client_config" "this" {}
@@ -60,7 +60,7 @@ module "resourcegroup" {
 # Key Vault to be protected by the NSP
 module "keyvault" {
   source  = "Azure/avm-res-keyvault-vault/azurerm"
-  version = "0.13.1"
+  version = "0.13.2"
 
   location         = module.resourcegroup.resource.location
   name             = module.naming.key_vault.name_unique
