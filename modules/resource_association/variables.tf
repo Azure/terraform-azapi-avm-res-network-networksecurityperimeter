@@ -8,19 +8,30 @@ variable "name" {
   }
 }
 
-variable "network_security_perimeter_resource_id" {
+variable "parent_id" {
   type        = string
   description = "The resource ID of the parent Network Security Perimeter."
+  nullable    = false
+
+  validation {
+    condition     = can(provider::azapi::parse_resource_id("Microsoft.Network/networkSecurityPerimeters", var.parent_id))
+    error_message = "`parent_id` must be a valid Network Security Perimeter resource ID."
+  }
 }
 
 variable "private_link_resource_id" {
   type        = string
-  description = "The ARM resource ID of the PaaS resource to associate (must support Private Link)."
+  description = "The fully-qualified ARM resource ID of the PaaS resource to associate (must support Private Link). Changing this immutable target deletes and recreates the association and its owned association-scope extensions, not the PaaS resource. Polymorphic resource types are deliberately not restricted to one parse_resource_id type under TFNFR38."
 }
 
 variable "profile_resource_id" {
   type        = string
   description = "The resource ID of the NSP profile to assign to this association."
+
+  validation {
+    condition     = can(provider::azapi::parse_resource_id("Microsoft.Network/networkSecurityPerimeters/profiles", var.profile_resource_id))
+    error_message = "`profile_resource_id` must be a valid NSP profile resource ID."
+  }
 }
 
 variable "access_mode" {

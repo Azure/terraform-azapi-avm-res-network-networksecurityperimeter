@@ -15,7 +15,7 @@ output "links" {
 
 output "name" {
   description = "The name of the network security perimeter."
-  value       = azapi_resource.network_security_perimeter.name
+  value       = azapi_resource.this.name
 }
 
 # NSP-specific outputs
@@ -26,8 +26,11 @@ output "profiles" {
 
 # AVM required outputs
 output "resource" {
-  description = "The full network security perimeter resource object."
-  value       = azapi_resource.network_security_perimeter
+  description = "Stable perimeter identity attributes. Raw provider objects are no longer exported."
+  value = {
+    id   = azapi_resource.this.id
+    name = azapi_resource.this.name
+  }
 }
 
 output "resource_associations" {
@@ -37,5 +40,5 @@ output "resource_associations" {
 
 output "resource_id" {
   description = "The resource ID of the network security perimeter."
-  value       = azapi_resource.network_security_perimeter.id
+  value       = azapi_resource.this.id
 }
